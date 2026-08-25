@@ -1,4 +1,4 @@
-import { mockAnalyzer, mockGenerator } from "./mock-adapters";
+import { apiAnalyzer, apiGenerator } from "./api-adapters";
 
-export const analyzerService = mockAnalyzer;
-export const generatorService = mockGenerator;
+export const analyzerService = apiAnalyzer;
+export const generatorService = apiGenerator;
