@@ -1,9 +1,10 @@
 import type { AnalyzerAdapter, GeneratorAdapter } from "./types";
 
 async function request<T>(url: string, body: unknown): Promise<T> {
+  const accessCode = window.sessionStorage.getItem("make-it-me-access-code") || "";
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-App-Access-Code": accessCode },
     body: JSON.stringify(body),
   });
   const payload = await response.json();
