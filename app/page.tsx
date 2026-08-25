@@ -27,6 +27,7 @@ export default function Home() {
   const [appearanceManager, setAppearanceManager] = useState(false);
   const [referenceSrc, setReferenceSrc] = useState(referenceImage);
   const [resultSrc, setResultSrc] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [intensity, setIntensity] = useState(86);
   const [toast, setToast] = useState("");
@@ -38,6 +39,7 @@ export default function Home() {
     try {
       const saved = window.localStorage.getItem("make-it-me-appearances");
       if (saved) setAppearances([...defaultAppearances, ...JSON.parse(saved)]);
+      setAccessCode(window.sessionStorage.getItem("make-it-me-access-code") || "");
     } catch {}
   }, []);
 
@@ -64,6 +66,8 @@ export default function Home() {
 
   const handleReference = (file?: File) => {
     if (!file) return;
+    if (!accessCode.trim()) { notify("请先输入体验访问码"); return; }
+    window.sessionStorage.setItem("make-it-me-access-code", accessCode.trim());
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onload = () => { const image = String(reader.result); setReferenceSrc(image); void start(image); };
@@ -125,8 +129,9 @@ export default function Home() {
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-lime-300/20 bg-lime-300/5 px-3 py-1.5 text-[11px] text-lime-200"><span className="h-1.5 w-1.5 rounded-full bg-lime-300"/>你的灵感，主角换成你</div>
             <h1 className="max-w-3xl text-4xl font-medium leading-[1.05] tracking-[-.05em] sm:text-6xl md:text-7xl">喜欢这张？<br/><span className="text-white/35">换我来拍。</span></h1>
             <p className="mt-5 max-w-md text-sm leading-6 text-white/45 md:text-base">上传一张照片或视频。AI 会读懂场景、镜头和动作，再用你的形象重新演绎。</p>
+            <div className="mt-7 w-full max-w-xl text-left"><label className="ml-1 text-[10px] uppercase tracking-[.16em] text-white/30">体验访问码</label><input type="password" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} placeholder="用于保护 API 额度" className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[.035] px-4 py-3 text-sm outline-none transition focus:border-lime-300/40"/></div>
             <input ref={fileRef} className="hidden" type="file" accept="image/*,video/*" onChange={(event) => handleReference(event.target.files?.[0])}/>
-            <button onClick={() => fileRef.current?.click()} className="group relative mt-9 w-full max-w-xl overflow-hidden rounded-[28px] border border-dashed border-white/20 bg-white/[.035] p-10 transition hover:border-lime-300/50 hover:bg-lime-300/[.03] sm:p-14">
+            <button onClick={() => fileRef.current?.click()} className="group relative mt-4 w-full max-w-xl overflow-hidden rounded-[28px] border border-dashed border-white/20 bg-white/[.035] p-10 transition hover:border-lime-300/50 hover:bg-lime-300/[.03] sm:p-14">
               <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white text-black transition group-hover:scale-105"><IconUpload size={23}/></span>
               <b className="mt-5 block text-base">选择参考照片或视频</b>
               <span className="mt-2 block text-xs text-white/35">支持 JPG、PNG、WEBP、MP4 · 最大 50MB</span>
