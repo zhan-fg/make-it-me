@@ -83,6 +83,7 @@ export default function Home() {
     try {
       const selected = appearances.find((item) => item.id === appearance);
       if (!selected) throw new Error("请先选择我的形象");
+      if (!selected.image.startsWith("data:image/")) throw new Error("预设形象仅供演示，请先在“我的形象”中上传本人照片");
       const result = await generatorService.generate({
         appearanceId: appearance,
         appearanceImage: selected.image,
