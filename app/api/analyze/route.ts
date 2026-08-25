@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guardApiRequest } from "@/lib/api-security";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,8 @@ const schema = {
 
 export async function POST(request: Request) {
   try {
+    const guard = guardApiRequest(request, "analyze");
+    if (guard) return NextResponse.json({ error: guard.error }, { status: guard.status });
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "服务端尚未配置 OPENAI_API_KEY" }, { status: 503 });
     const { image } = await request.json();
