@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-复制 `.env.example` 为 `.env.local`，并配置 `OPENAI_API_KEY`。部署到 Vercel 时应在项目环境变量中配置密钥，不能把密钥提交到仓库。
+复制 `.env.example` 为 `.env.local`，并配置 `OPENAI_API_KEY` 和自定义的 `APP_ACCESS_CODE`。用户在首页输入访问码后才能调用付费接口。部署到 Vercel 时应在项目环境变量中配置这些值，不能把密钥提交到仓库。
 
 ## 架构
 
