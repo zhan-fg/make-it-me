@@ -5,6 +5,9 @@ export type AnalysisResult = {
 
 export type GenerationRequest = {
   appearanceId: string;
+  appearanceImage: string;
+  appearanceParts?: Record<string, string>;
+  referenceImage: string;
   preserveScene: boolean;
   intensity: number;
 };
@@ -12,7 +15,7 @@ export type GenerationRequest = {
 export type GenerationResult = { id: string; imageUrl: string };
 
 export interface AnalyzerAdapter {
-  analyze(file?: File): Promise<AnalysisResult>;
+  analyze(image: string): Promise<AnalysisResult>;
 }
 
 export interface GeneratorAdapter {
