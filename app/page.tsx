@@ -26,6 +26,7 @@ export default function Home() {
   const [appearances, setAppearances] = useState<Appearance[]>(defaultAppearances);
   const [appearanceManager, setAppearanceManager] = useState(false);
   const [referenceSrc, setReferenceSrc] = useState(referenceImage);
+  const [resultSrc, setResultSrc] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [intensity, setIntensity] = useState(86);
   const [toast, setToast] = useState("");
@@ -49,29 +50,49 @@ export default function Home() {
     }
   };
 
-  const start = async () => {
+  const start = async (image = referenceSrc) => {
     setStage("analyzing");
-    const result = await analyzerService.analyze();
-    setAnalysis(result);
-    setStage("compose");
+    try {
+      const result = await analyzerService.analyze(image);
+      setAnalysis(result);
+      setStage("compose");
+    } catch (error) {
+      setStage("upload");
+      notify(error instanceof Error ? error.message : "图片解析失败");
+    }
   };
 
   const handleReference = (file?: File) => {
     if (!file) return;
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
-      reader.onload = () => { setReferenceSrc(String(reader.result)); void start(); };
+      reader.onload = () => { const image = String(reader.result); setReferenceSrc(image); void start(image); };
       reader.readAsDataURL(file);
       return;
     }
     setReferenceSrc(referenceImage);
-    void start();
+    notify("当前真实 API 版本请先上传照片，视频解析即将支持");
   };
 
   const generate = async () => {
     setStage("generating");
-    await generatorService.generate({ appearanceId: appearance, preserveScene: true, intensity });
-    setStage("result");
+    try {
+      const selected = appearances.find((item) => item.id === appearance);
+      if (!selected) throw new Error("请先选择我的形象");
+      const result = await generatorService.generate({
+        appearanceId: appearance,
+        appearanceImage: selected.image,
+        appearanceParts: selected.parts,
+        referenceImage: referenceSrc,
+        preserveScene: true,
+        intensity,
+      });
+      setResultSrc(result.imageUrl);
+      setStage("result");
+    } catch (error) {
+      setStage("compose");
+      notify(error instanceof Error ? error.message : "生成失败，请稍后重试");
+    }
   };
 
   const notify = (message: string) => {
@@ -140,7 +161,7 @@ export default function Home() {
       )}
 
       {stage === "generating" && <Generating image={referenceSrc} />}
-      {stage === "result" && <Result reference={referenceSrc} onAgain={() => setStage("compose")} notify={notify}/>}
+      {stage === "result" && <Result reference={referenceSrc} result={resultSrc} onAgain={() => setStage("compose")} notify={notify}/>}
       <AppearanceManager open={appearanceManager} appearances={appearances} selectedId={appearance} onClose={() => setAppearanceManager(false)} onSelect={setAppearance} onCreate={(item) => { persistAppearances([...appearances, item]); setAppearance(item.id); }} onDelete={(id) => { const next = appearances.filter((item) => item.id !== id); persistAppearances(next); if (appearance === id) setAppearance("soft"); }}/>
       {toast && <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-white/10 bg-white px-4 py-2.5 text-xs text-black shadow-2xl">{toast}</div>}
     </main>
@@ -160,7 +181,7 @@ function Generating({ image }: { image: string }) {
   return <section className="relative z-10 mx-auto flex min-h-[calc(100vh-90px)] max-w-3xl flex-col items-center justify-center px-5 pb-20 text-center"><div className="relative h-[360px] w-[270px] overflow-hidden rounded-[32px] border border-white/10 bg-white/5 sm:h-[440px] sm:w-[330px]"><img src={image} alt="正在生成" className="h-full w-full scale-110 object-cover opacity-30 blur-xl"/><div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/10"/><div className="absolute inset-0 grid place-items-center"><div className="breathe grid h-16 w-16 place-items-center rounded-3xl bg-lime-300 text-black"><IconSparkles size={25}/></div></div><div className="absolute bottom-0 left-0 h-1 bg-lime-300 transition-all duration-500" style={{width:`${value}%`}}/></div><p className="mt-7 text-xs uppercase tracking-[.2em] text-lime-200">Creating your shot · {value}%</p><h1 className="mt-3 text-3xl font-medium tracking-[-.04em]">正在让你走进画面</h1><p className="mt-3 text-sm text-white/35">重建场景光线 · 对齐人物姿态 · 融合你的形象</p></section>;
 }
 
-function Result({ reference, onAgain, notify }: { reference: string; onAgain: () => void; notify: (message: string) => void }) {
+function Result({ reference, result, onAgain, notify }: { reference: string; result: string; onAgain: () => void; notify: (message: string) => void }) {
   const [compare, setCompare] = useState(58);
-  return <section className="relative z-10 mx-auto max-w-6xl px-5 pb-20 pt-5 md:px-8 md:pt-9"><button onClick={onAgain} className="mb-5 flex items-center gap-2 text-xs text-white/45 hover:text-white"><IconArrowLeft size={15}/> 返回调整</button><div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs uppercase tracking-[.2em] text-lime-200/70">Your remake is ready</p><h1 className="mt-2 text-3xl font-medium tracking-[-.04em] md:text-4xl">这次，主角是你。</h1></div><span className="w-fit rounded-full bg-lime-300/10 px-3 py-1.5 text-[10px] text-lime-200">生成完成 · 4.8s</span></div><div className="grid gap-5 lg:grid-cols-[1fr_300px]"><div className="relative aspect-[4/5] overflow-hidden rounded-[28px] border border-white/10 sm:aspect-[16/10]"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=90" alt="仿拍结果" className="absolute inset-0 h-full w-full object-cover"/><div className="absolute inset-y-0 left-0 overflow-hidden border-r border-white/80" style={{width:`${compare}%`}}><img src={reference} alt="参考原图" className="h-full max-w-none object-cover" style={{width:"min(1100px, calc(100vw - 40px))"}}/></div><div className="absolute left-0 top-0 h-full w-full"><input aria-label="原图和结果对比" className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0" type="range" min="2" max="98" value={compare} onChange={(e)=>setCompare(Number(e.target.value))}/><div className="pointer-events-none absolute top-1/2 grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-black shadow-xl" style={{left:`${compare}%`}}><span className="text-xs">↔</span></div></div><span className="absolute left-4 top-4 rounded-full bg-black/45 px-3 py-1.5 text-[10px] backdrop-blur">原图</span><span className="absolute right-4 top-4 rounded-full bg-lime-300 px-3 py-1.5 text-[10px] text-black">我的版本</span></div><aside className="rounded-[28px] border border-white/10 bg-[#141416] p-5"><h2 className="text-lg font-medium">保存这次灵感</h2><p className="mt-2 text-xs leading-5 text-white/35">高清图片已准备好，也可以分享给朋友看看。</p><a href="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1800&q=95" target="_blank" rel="noreferrer" className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3.5 text-xs font-semibold text-black"><IconDownload size={16}/> 打开高清图</a><button onClick={async()=>{ if (navigator.share) await navigator.share({title:"Make it me",url:location.href}); else { await navigator.clipboard.writeText(location.href); notify("分享链接已复制"); } }} className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3.5 text-xs hover:bg-white/5"><IconShare3 size={16}/> 分享作品</button><div className="my-5 h-px bg-white/10"/><div className="space-y-3 text-xs"><div className="flex justify-between"><span className="text-white/35">场景</span><span>海边日落</span></div><div className="flex justify-between"><span className="text-white/35">形象</span><span>已选择</span></div><div className="flex justify-between"><span className="text-white/35">还原度</span><span className="text-lime-200">86%</span></div></div><button onClick={onAgain} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-lime-300/20 bg-lime-300/5 px-4 py-3.5 text-xs text-lime-100 hover:bg-lime-300/10"><IconRefresh size={16}/> 再仿一张</button></aside></div></section>;
+  return <section className="relative z-10 mx-auto max-w-6xl px-5 pb-20 pt-5 md:px-8 md:pt-9"><button onClick={onAgain} className="mb-5 flex items-center gap-2 text-xs text-white/45 hover:text-white"><IconArrowLeft size={15}/> 返回调整</button><div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs uppercase tracking-[.2em] text-lime-200/70">Your remake is ready</p><h1 className="mt-2 text-3xl font-medium tracking-[-.04em] md:text-4xl">这次，主角是你。</h1></div><span className="w-fit rounded-full bg-lime-300/10 px-3 py-1.5 text-[10px] text-lime-200">AI 生成完成</span></div><div className="grid gap-5 lg:grid-cols-[1fr_300px]"><div className="relative aspect-[4/5] overflow-hidden rounded-[28px] border border-white/10 sm:aspect-[16/10]"><img src={result} alt="仿拍结果" className="absolute inset-0 h-full w-full object-cover"/><div className="absolute inset-y-0 left-0 overflow-hidden border-r border-white/80" style={{width:`${compare}%`}}><img src={reference} alt="参考原图" className="h-full max-w-none object-cover" style={{width:"min(1100px, calc(100vw - 40px))"}}/></div><div className="absolute left-0 top-0 h-full w-full"><input aria-label="原图和结果对比" className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0" type="range" min="2" max="98" value={compare} onChange={(e)=>setCompare(Number(e.target.value))}/><div className="pointer-events-none absolute top-1/2 grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-black shadow-xl" style={{left:`${compare}%`}}><span className="text-xs">↔</span></div></div><span className="absolute left-4 top-4 rounded-full bg-black/45 px-3 py-1.5 text-[10px] backdrop-blur">原图</span><span className="absolute right-4 top-4 rounded-full bg-lime-300 px-3 py-1.5 text-[10px] text-black">我的版本</span></div><aside className="rounded-[28px] border border-white/10 bg-[#141416] p-5"><h2 className="text-lg font-medium">保存这次灵感</h2><p className="mt-2 text-xs leading-5 text-white/35">高清图片已准备好，也可以分享给朋友看看。</p><a href={result} download={`make-it-me-${Date.now()}.jpg`} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3.5 text-xs font-semibold text-black"><IconDownload size={16}/> 保存高清图</a><button onClick={async()=>{ if (navigator.share) await navigator.share({title:"Make it me",url:location.href}); else { await navigator.clipboard.writeText(location.href); notify("分享链接已复制"); } }} className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3.5 text-xs hover:bg-white/5"><IconShare3 size={16}/> 分享作品</button><div className="my-5 h-px bg-white/10"/><div className="space-y-3 text-xs"><div className="flex justify-between"><span className="text-white/35">场景</span><span>AI 已解析</span></div><div className="flex justify-between"><span className="text-white/35">形象</span><span>已融合</span></div><div className="flex justify-between"><span className="text-white/35">还原度</span><span className="text-lime-200">真实生成</span></div></div><button onClick={onAgain} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-lime-300/20 bg-lime-300/5 px-4 py-3.5 text-xs text-lime-100 hover:bg-lime-300/10"><IconRefresh size={16}/> 再仿一张</button></aside></div></section>;
 }
