@@ -117,7 +117,7 @@ export type CaptureResult = {
   candidates: CaptureFrame[];
   selectedFrames: CaptureFrame[];
   fullBodyImage?: string;
-  detector: "browser-face-detector" | "local-quality-only";
+  detector: "mediapipe" | "browser-face-detector" | "local-quality-only";
 };
 
 export type EphemeralIdentitySession = {
