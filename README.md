@@ -19,7 +19,9 @@ npm run dev
 Reference media
   ├─ Geometry Analyzer (browser)
   │    ├─ media dimensions / video representative frame
-  │    ├─ FaceDetector when browser capability exists
+  │    ├─ MediaPipe Face Landmarker（默认）
+  │    ├─ MediaPipe Pose Landmarker（默认）
+  │    ├─ FaceDetector（原生降级路径）
   │    └─ explicitly-labelled geometry heuristics
   ├─ Semantic Analyzer (server proxy)
   │    ├─ DashScope/Qwen（主路径）或 OpenAI / Gemini structured JSON
@@ -38,18 +40,18 @@ Reference media
 | --- | --- | --- |
 | 图片宽高 | 已实现 | 浏览器真实媒体元数据 |
 | 视频宽高、时长、代表帧 | 已实现 | 浏览器解码并抽取首段代表帧 |
-| 人脸数量、主脸 Bounding Box | 条件可用 | 浏览器支持 Shape Detection `FaceDetector` 时真实执行 |
-| 人物区域、人物位置、Body Coverage | 启发式 | 基于真实人脸框估算，明确标记 `geometry-heuristic` |
+| 人脸数量、主脸 Bounding Box、头部姿态 | 已实现 | MediaPipe Face Landmarker；模型不可用时降级至浏览器 `FaceDetector` |
+| 人体关键点、人物区域、身体朝向 | 已实现 | MediaPipe Pose Landmarker，本地 WASM 推理 |
+| 人物位置、Body Coverage | 已实现 | 基于真实 Landmarker 结果推导并标记来源 |
 | 场景、构图、机位、视线、表情、姿态、外观 | 已实现 | DashScope/Qwen、OpenAI 或 Gemini VLM；无 Key 或失败时 Mock fallback |
 | Structured JSON 校验 | 已实现 | 服务端 schema 约束 + 防御性解析；失败返回 warning |
-| MediaPipe Face / Pose Landmarker | 已预留 | adapter capability 为 false，本版未引入额外 WASM/模型包体 |
 | Person Segmentation / Mask | 未实现 | adapter capability 为 false |
 | Depth / Occlusion | 未实现 | adapter capability 为 false |
 | 视频 timeline / pose envelope | 类型已预留 | 当前只写入代表帧 timeline，未做多帧追踪 |
 
 ## 代码结构
 
-- `services/geometry-analyzer.ts`：浏览器几何能力探测、媒体解码、FaceDetector 与启发式推导
+- `services/geometry-analyzer.ts`：浏览器媒体解码、MediaPipe Face/Pose Landmarker、FaceDetector 降级与几何推导
 - `services/semantic-analyzer.ts`：浏览器端 VLM adapter、响应校验与本地 Mock fallback
 - `services/reference-analyzer.ts`：Geometry + Semantic Fusion、TargetShot 派生
 - `services/requirement-planner.ts`：从 `ReferenceAnalysis` 规划 Simple / Standard / Advanced 采集
@@ -60,6 +62,7 @@ Reference media
 ## 检测与隐私边界
 
 - 不可用能力不会填充伪造数值，统一返回 `available=false` 或 `null`。
+- MediaPipe WASM 与模型首次分析时从官方/CDN 地址加载，后续由浏览器缓存；检测在浏览器本地执行，图片不会因此上传给 MediaPipe。
 - VLM 不覆盖真实 CV 产生的 Bounding Box、可见度或后续 Landmarker 头部姿态。
 - Demo 不录制或上传整段 Guided Capture 视频，只保留自动抓取的候选关键帧。
 - `EphemeralIdentitySession` 只存在于当前页面状态；完成或重置流程时清空，不声称服务器永久删除。
