@@ -35,10 +35,10 @@ export function deriveTargetShot(analysis: ReferenceAnalysis): TargetShot {
     shotType: analysis.shot.shotType,
     mediaType: analysis.reference.mediaType,
     face: {
-      yaw: analysis.shot.face.yaw ?? 0,
-      pitch: analysis.shot.face.pitch ?? 0,
-      roll: analysis.shot.face.roll ?? 0,
-      visibility: analysis.shot.face.visibility ?? 0.75,
+      yaw: analysis.shot.face.yaw,
+      pitch: analysis.shot.face.pitch,
+      roll: analysis.shot.face.roll,
+      visibility: analysis.shot.face.visibility,
     },
     body: { coverage: analysis.shot.body.coverage, orientation: analysis.shot.body.orientation },
     scene: analysis.scene.summary,
@@ -64,7 +64,9 @@ export const referenceAnalyzer = {
       "shot.body.orientation", "shot.body.poseSummary", "shot.interaction", "appearance.outfit", "appearance.hair",
       "appearance.makeup", "appearance.accessories",
     ];
-    semanticFields.forEach((field) => { provenance[field] = semanticSource; });
+    semanticFields.forEach((field) => {
+      if (!provenance[field]?.available) provenance[field] = semanticSource;
+    });
     provenance["reference.mediaType"] = { source: "browser-metadata", available: true, capability: "media-type", confidence: 1 };
     provenance["scene.subjectRegion"] = geometry.provenance["geometry.personBoundingBox"] ?? { source: "unavailable", available: false, capability: "person-region" };
     if (!geometry.inferred.subjectPosition) provenance["shot.subjectPosition"] = semanticSource;
@@ -78,7 +80,7 @@ export const referenceAnalyzer = {
     provenance["shot.face.pitch"] = geometry.provenance["geometry.headPoseAvailable"];
     provenance["shot.face.roll"] = geometry.provenance["geometry.headPoseAvailable"];
 
-    const hasRealGeometry = geometry.provenance["geometry.faceBoundingBox"]?.source === "browser-face-detector";
+    const hasRealGeometry = ["browser-face-detector", "mediapipe-face-landmarker"].includes(geometry.provenance["geometry.faceBoundingBox"]?.source ?? "");
     const confidence = hasRealGeometry ? Math.min(1, semantic.confidence * 0.7 + 0.27) : semantic.confidence;
     return {
       id: `reference-${Date.now()}`,
@@ -99,18 +101,18 @@ export const referenceAnalyzer = {
         cameraAngle: semantic.shot.cameraAngle,
         framing: geometry.inferred.framing ?? semantic.shot.framing,
         face: {
-          yaw: null,
-          pitch: null,
-          roll: null,
+          yaw: geometry.inferred.faceYaw ?? null,
+          pitch: geometry.inferred.facePitch ?? null,
+          roll: geometry.inferred.faceRoll ?? null,
           visibility: geometry.inferred.faceVisibility ?? null,
           gaze: semantic.shot.gaze,
           expression: semantic.shot.expression,
         },
         body: {
           coverage,
-          orientation: semantic.shot.bodyOrientation,
-          poseSummary: semantic.shot.poseSummary,
-          keypointsAvailable: false,
+          orientation: geometry.inferred.bodyOrientation ?? semantic.shot.bodyOrientation,
+          poseSummary: geometry.inferred.poseSummary ?? semantic.shot.poseSummary,
+          keypointsAvailable: geometry.geometry.bodyKeypointsAvailable,
         },
         interaction: semantic.shot.interaction,
       },
