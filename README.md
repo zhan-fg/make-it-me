@@ -1,6 +1,6 @@
 # Make it me · 一键仿拍
 
-移动优先的 AI 仿拍 Web Demo。流程覆盖参考素材分析、按镜头规划最小身份素材、引导式临时采集、本地关键帧筛选、Mock 生成与结果对比。
+移动优先的 AI 仿拍 Web Demo。流程覆盖参考素材分析、按镜头规划最小身份素材、引导式临时采集、本地关键帧筛选、DashScope/Wan2.7 真实生成与结果对比。
 
 ## 本地运行
 
@@ -58,6 +58,7 @@ Reference media
 - `services/reference-analyzer.ts`：Geometry + Semantic Fusion、TargetShot 派生
 - `services/requirement-planner.ts`：从 `ReferenceAnalysis` 规划 Simple / Standard / Advanced 采集
 - `app/api/analyze/route.ts`：DashScope/Qwen、OpenAI、Gemini 服务端代理，structured JSON 与自动 Mock fallback
+- `app/api/generate/route.ts`：服务端校验多图生成请求并调用 DashScope `wan2.7-image`
 - `components/guided-capture.tsx`：相机引导、自动抓帧和权限回退
 - `services/capture-quality.ts`：浏览器端亮度、清晰度与最佳帧选择
 - `services/mediapipe-vision.ts`：共享 MediaPipe 模型加载、图片分析与相机 `VIDEO` 模式实时检测
@@ -71,4 +72,7 @@ Reference media
 - VLM 不覆盖真实 CV 产生的 Bounding Box、可见度或后续 Landmarker 头部姿态。
 - Demo 不录制或上传整段 Guided Capture 视频，只保留自动抓取的候选关键帧。
 - `EphemeralIdentitySession` 只存在于当前页面状态；完成或重置流程时清空，不声称服务器永久删除。
-- 当前 Generator Adapter 仍为 Mock；项目不包含登录、支付、数据库或云端用户资产存储。
+- Generator Adapter 会在浏览器压缩参考素材和身份关键帧，再通过受访问码保护的服务端路由调用 DashScope；真实失败不会回退成 Mock 成功。
+- Wan2.7 输入最多 9 张图片，每张不超过 20MB；生成结果 URL 由模型服务临时提供，应及时保存。
+- 项目不包含登录、支付、数据库或云端用户资产存储。
+

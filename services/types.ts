@@ -150,15 +150,16 @@ export type SemanticAnalysis = {
 };
 
 export type GenerationRequest = {
-  appearanceId: string;
-  appearanceImage: string;
-  appearanceParts?: Record<string, string>;
   referenceImage: string;
+  identityFrames: Array<{ image: string; view: string; qualityScore: number }>;
+  fullBodyImage?: string;
+  referenceAnalysis: ReferenceAnalysis;
+  targetShot: TargetShot;
   preserveScene: boolean;
   intensity: number;
 };
 
-export type GenerationResult = { id: string; imageUrl: string };
+export type GenerationResult = { id: string; imageUrl: string; provider: "dashscope"; model: string; elapsedMs: number; requestId?: string };
 
 export interface GeometryAnalyzerAdapter {
   detectCapabilities(): { imageDimensions: boolean; faceDetector: boolean; bodyKeypoints: boolean; headPose: boolean; personSegmentation: boolean; depth: boolean; occlusion: boolean };
@@ -193,3 +194,4 @@ export interface SemanticAnalyzerAdapter {
 export interface GeneratorAdapter {
   generate(request: GenerationRequest): Promise<GenerationResult>;
 }
+

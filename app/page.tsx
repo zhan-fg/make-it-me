@@ -6,7 +6,7 @@ import { GuidedCapture } from "@/components/guided-capture";
 import { generatorAdapter } from "@/services/generator-adapter";
 import { deriveTargetShot, referenceAnalyzer } from "@/services/reference-analyzer";
 import { planIdentityRequirement } from "@/services/requirement-planner";
-import type { CaptureResult, EphemeralIdentitySession, IdentityRequirement, ReferenceAnalysis, TargetShot } from "@/services/types";
+import type { CaptureResult, EphemeralIdentitySession, GenerationResult, IdentityRequirement, ReferenceAnalysis, TargetShot } from "@/services/types";
 
 type View = "discover" | "analyzing" | "requirements" | "capture" | "review" | "generating" | "result" | "appearance";
 type Reference = { id: string; title: string; detail: string; mediaType: "image" | "video"; source?: string; colors: string };
@@ -31,6 +31,8 @@ export default function Home() {
   const [session, setSession] = useState<EphemeralIdentitySession>();
   const [capture, setCapture] = useState<CaptureResult>();
   const [resultImage, setResultImage] = useState<string>();
+  const [generationResult, setGenerationResult] = useState<GenerationResult>();
+  const [generationError, setGenerationError] = useState<string>();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const analyzeReference = async (nextReference: Reference) => {
@@ -56,14 +58,16 @@ export default function Home() {
   };
 
   const generate = async () => {
-    if (!capture || !targetShot) return;
-    setView("generating");
-    const generated = await generatorAdapter.generate(reference?.source, capture, targetShot);
-    setResultImage(generated.imageUrl); setView("result");
+    if (!capture || !targetShot || !referenceAnalysis) return;
+    setGenerationError(undefined); setView("generating");
+    try {
+      const generated = await generatorAdapter.generate(reference?.source, capture, targetShot, referenceAnalysis);
+      setGenerationResult(generated); setResultImage(generated.imageUrl); setView("result");
+    } catch (error) { const message = error instanceof Error ? error.message : "图片生成失败"; setGenerationError(message); setView("review"); }
   };
 
   const reset = () => {
-    setReference(undefined); setReferenceAnalysis(undefined); setTargetShot(undefined); setRequirement(undefined); setSession(undefined); setCapture(undefined); setResultImage(undefined); setView("discover");
+    setReference(undefined); setReferenceAnalysis(undefined); setTargetShot(undefined); setRequirement(undefined); setSession(undefined); setCapture(undefined); setResultImage(undefined); setGenerationResult(undefined); setGenerationError(undefined); setView("discover");
     if (fileInput.current) fileInput.current.value = "";
   };
 
@@ -74,9 +78,10 @@ export default function Home() {
     {view === "analyzing" && <Analyzing reference={reference} />}
     {view === "requirements" && referenceAnalysis && targetShot && requirement && <Requirements reference={reference} analysis={referenceAnalysis} target={targetShot} requirement={requirement} start={() => setView("capture")} appearance={() => setView("appearance")} />}
     {view === "capture" && requirement && <GuidedCapture requirement={requirement} onComplete={completeCapture} onCancel={() => setView("requirements")} />}
+    {view === "review" && generationError && <div role="alert" className="mx-auto mt-4 max-w-4xl rounded-2xl border border-[#f1b5aa] bg-[#fff1ee] p-4 text-sm text-[#8f3328]"><b>真实生成失败</b><p className="mt-1 leading-6">{generationError}</p><p className="mt-2 text-xs text-[#9b5a51]">未使用 Mock 结果。请检查访问码、模型区域或稍后重试。</p></div>}
     {view === "review" && capture && requirement && <CaptureReview capture={capture} requirement={requirement} retake={() => setView("capture")} continueFlow={generate} />}
     {view === "generating" && <Generating reference={reference} />}
-    {view === "result" && <Result reference={reference} resultImage={resultImage} again={() => { setCapture(undefined); setSession((current) => current ? { ...current, capture: undefined } : current); setView("capture"); }} reset={reset} />}
+    {view === "result" && <Result reference={reference} resultImage={resultImage} generation={generationResult} again={() => { setCapture(undefined); setSession((current) => current ? { ...current, capture: undefined } : current); setView("capture"); }} reset={reset} />}
     {view === "appearance" && <Appearance back={() => setView(reference ? "requirements" : "discover")} />}
     {session && view !== "discover" && view !== "appearance" && <div className="fixed bottom-3 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/70 bg-white/90 px-3 py-2 text-[10px] text-[#66666d] shadow-lg backdrop-blur sm:hidden"><IconLock size={11} className="mr-1 inline"/>本次会话临时素材</div>}
   </main>;
@@ -101,7 +106,7 @@ function AccessCodeField() {
   return <label className="mt-3 block max-w-xs text-left">
     <span className="sr-only">体验访问码</span>
     <input type="password" value={value} onChange={(event) => update(event.target.value)} placeholder="输入体验访问码" autoComplete="current-password" className="w-full rounded-[14px] border border-white/80 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-[#929299] focus:border-[#7655d6]"/>
-    <span className="mt-1.5 block text-[10px] text-[#85858d]">仅保存在当前浏览器会话，用于授权 AI 分析请求</span>
+    <span className="mt-1.5 block text-[10px] text-[#85858d]">仅保存在当前浏览器会话，用于授权 AI 分析与生成请求</span>
   </label>;
 }
 
@@ -227,11 +232,11 @@ function CaptureReview({ capture, requirement, retake, continueFlow }: { capture
 }
 
 function Generating({ reference }: { reference?: Reference }) {
-  return <Page><div className="grid min-h-[620px] place-items-center text-center"><div><div className="relative mx-auto"><ReferenceView reference={reference} className="h-[330px] w-[250px] rounded-[28px] opacity-70"/><span className="absolute inset-0 grid place-items-center"><span className="grid h-16 w-16 animate-pulse place-items-center rounded-full bg-white/85 shadow-xl"><IconSparkles className="text-[#7655d6]"/></span></span></div><h1 className="mt-6 text-2xl font-semibold">正在生成你的版本</h1><p className="mt-2 text-sm text-[#757575]">保留原镜头的场景、动作和氛围…</p><p className="mt-4 text-[11px] text-[#8b8b91]">当前 Generator Adapter 为 Mock</p></div></div></Page>;
+  return <Page><div className="grid min-h-[620px] place-items-center text-center"><div><div className="relative mx-auto"><ReferenceView reference={reference} className="h-[330px] w-[250px] rounded-[28px] opacity-70"/><span className="absolute inset-0 grid place-items-center"><span className="grid h-16 w-16 animate-pulse place-items-center rounded-full bg-white/85 shadow-xl"><IconSparkles className="text-[#7655d6]"/></span></span></div><h1 className="mt-6 text-2xl font-semibold">正在生成你的版本</h1><p className="mt-2 text-sm text-[#757575]">正在由 DashScope 保留原镜头的场景、动作和氛围…</p><p className="mt-4 text-[11px] text-[#8b8b91]">真实生成通常需要几十秒，请保持页面打开</p></div></div></Page>;
 }
 
-function Result({ reference, resultImage, again, reset }: { reference?: Reference; resultImage?: string; again: () => void; reset: () => void }) {
-  return <Page><h1 className="text-[34px] font-bold">这张，是你的版本</h1><p className="mt-2 text-[15px] text-[#757575]">原场景保留 · Shot 沿用 · 本次临时形象</p><div className="mt-5 grid gap-4 lg:grid-cols-2"><div><ReferenceView reference={reference} className="h-[500px] rounded-[26px]"/><p className="mt-2 text-sm">参考素材</p></div><div><div className="h-[500px] overflow-hidden rounded-[26px] bg-gradient-to-br from-[#e5b99c] to-[#465272]">{resultImage ? <img src={resultImage} alt="生成结果" className="h-full w-full object-cover saturate-75"/> : null}</div><div className="mt-2 flex items-center gap-2 text-sm">我的版本 <Pill>Mock 预览</Pill></div></div></div><div className="mt-6 flex flex-wrap items-center gap-2.5 text-[13px]"><button className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2"><IconDownload size={15}/>保存高清</button><button className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2"><IconShare3 size={15}/>分享对比图</button><button onClick={again} className="rounded-full bg-[#1a1a1f] px-3.5 py-2 text-white">再拍一次</button><button onClick={reset} className="ml-auto text-[#757575]">完成并清空本次素材</button></div><div className="mt-5 flex items-start gap-3 rounded-2xl bg-[#f4efff] p-4 text-xs text-[#6f6880]"><IconLock size={16} className="shrink-0"/>点击“完成并清空”会清除当前页面会话内的采集状态。Demo 不声称服务器永久删除。</div></Page>;
+function Result({ reference, resultImage, generation, again, reset }: { reference?: Reference; resultImage?: string; generation?: GenerationResult; again: () => void; reset: () => void }) {
+  return <Page><h1 className="text-[34px] font-bold">这张，是你的版本</h1><p className="mt-2 text-[15px] text-[#757575]">原场景保留 · Shot 沿用 · 本次临时形象</p><div className="mt-5 grid gap-4 lg:grid-cols-2"><div><ReferenceView reference={reference} className="h-[500px] rounded-[26px]"/><p className="mt-2 text-sm">参考素材</p></div><div><div className="h-[500px] overflow-hidden rounded-[26px] bg-gradient-to-br from-[#e5b99c] to-[#465272]">{resultImage ? <img src={resultImage} alt="生成结果" className="h-full w-full object-cover"/> : null}</div><div className="mt-2 flex items-center gap-2 text-sm">我的版本 <Pill>DashScope 真实生成</Pill>{generation && <span className="text-xs text-[#77777e]">{generation.model} · {(generation.elapsedMs / 1000).toFixed(1)} 秒</span>}</div></div></div><div className="mt-6 flex flex-wrap items-center gap-2.5 text-[13px]"><a href={resultImage} download="make-it-me.png" className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2"><IconDownload size={15}/>保存高清</a><button className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2"><IconShare3 size={15}/>分享对比图</button><button onClick={again} className="rounded-full bg-[#1a1a1f] px-3.5 py-2 text-white">再拍一次</button><button onClick={reset} className="ml-auto text-[#757575]">完成并清空本次素材</button></div><div className="mt-5 flex items-start gap-3 rounded-2xl bg-[#f4efff] p-4 text-xs text-[#6f6880]"><IconLock size={16} className="shrink-0"/>点击“完成并清空”会清除当前页面会话内的采集状态。生成图片 URL 由模型服务临时提供，请及时保存。</div></Page>;
 }
 
 function Appearance({ back }: { back: () => void }) {
@@ -241,3 +246,4 @@ function Appearance({ back }: { back: () => void }) {
 function Page({ children }: { children: React.ReactNode }) { return <div className="mx-auto max-w-[1280px] px-4 pb-16 pt-5 sm:px-6 sm:pt-8 lg:px-0">{children}</div>; }
 function Pill({ children }: { children: React.ReactNode }) { return <span className="rounded-full bg-[#f5f5f7] px-3.5 py-2 text-[12px]">{children}</span>; }
 function ReferenceView({ reference, className }: { reference?: Reference; className: string }) { return <div className={`relative overflow-hidden bg-gradient-to-br ${reference?.colors || "from-[#e5b094] to-[#4d384d]"} ${className}`}>{reference?.source ? reference.mediaType === "video" ? <video src={reference.source} muted loop autoPlay playsInline className="h-full w-full object-cover"/> : <img src={reference.source} alt="参考素材" className="h-full w-full object-cover"/> : <><div className="absolute left-[36%] top-[27%] h-[59%] w-[25%] rounded-[70px] bg-[#241f29]/80"/><div className="absolute right-[8%] top-[10%] h-56 w-56 rounded-full bg-white/10"/></>}</div>; }
+
