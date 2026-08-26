@@ -34,6 +34,8 @@ Reference media
 
 核心契约为 `services/types.ts` 中的 `ReferenceAnalysis`。每个分析字段通过 `provenance` 标记来源、能力名称、是否可用和可选置信度；UI 默认只显示消费级摘要，技术信息收在“分析详情 / 开发信息”中。
 
+结果页分别展示 DashScope 语义、人脸几何和人体姿态状态。Requirement Planner 仅在 MediaPipe 提供可靠正脸角度和可见度时选择 Simple；几何信息不足、VLM 推测或 Mock 降级时采用更保守的 Standard / Advanced，并通过 `basis` 与 `basisSummary` 说明规划依据。
+
 ### 当前能力
 
 | 能力 | 状态 | 来源 / 说明 |
