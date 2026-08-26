@@ -60,11 +60,14 @@ Reference media
 - `app/api/analyze/route.ts`：DashScope/Qwen、OpenAI、Gemini 服务端代理，structured JSON 与自动 Mock fallback
 - `components/guided-capture.tsx`：相机引导、自动抓帧和权限回退
 - `services/capture-quality.ts`：浏览器端亮度、清晰度与最佳帧选择
+- `services/mediapipe-vision.ts`：共享 MediaPipe 模型加载、图片分析与相机 `VIDEO` 模式实时检测
 
 ## 检测与隐私边界
 
 - 不可用能力不会填充伪造数值，统一返回 `available=false` 或 `null`。
 - MediaPipe WASM 与模型首次分析时从官方/CDN 地址加载，后续由浏览器缓存；检测在浏览器本地执行，图片不会因此上传给 MediaPipe。
+- Guided Capture 会等待用户达到目标头部角度并稳定保持后自动抓拍；超时或模型不可用时自动降级为定时抓拍。
+- 关键帧评分综合亮度、清晰度、人脸数量/大小、姿态匹配和面部可见度，并按目标角度去重选择。
 - VLM 不覆盖真实 CV 产生的 Bounding Box、可见度或后续 Landmarker 头部姿态。
 - Demo 不录制或上传整段 Guided Capture 视频，只保留自动抓取的候选关键帧。
 - `EphemeralIdentitySession` 只存在于当前页面状态；完成或重置流程时清空，不声称服务器永久删除。
