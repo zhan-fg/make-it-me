@@ -127,6 +127,8 @@ function sourceLabel(source: ReferenceAnalysis["provenance"][string]["source"]) 
   return {
     "browser-metadata": "真实媒体信息",
     "browser-face-detector": "真实浏览器 CV",
+    "mediapipe-face-landmarker": "MediaPipe 人脸 CV",
+    "mediapipe-pose-landmarker": "MediaPipe 姿态 CV",
     "geometry-heuristic": "几何启发式",
     vlm: "VLM",
     mock: "Mock",
