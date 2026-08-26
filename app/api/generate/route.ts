@@ -50,7 +50,8 @@ export async function POST(request: Request) {
     if (guard) return NextResponse.json({ error: guard.error }, { status: guard.status });
     const input = await request.json();
     if (!input.referenceImage || !input.appearanceImage) return NextResponse.json({ error: "参考图和我的形象都是必需的" }, { status: 400 });
-    if ((process.env.AI_PROVIDER || "openai").toLowerCase() === "wanx") {
+    const provider = (process.env.AI_PROVIDER || "openai").toLowerCase();
+    if (["dashscope", "qwen", "aliyun", "wanx"].includes(provider)) {
       return NextResponse.json(await generateWithWanx(input));
     }
     const apiKey = process.env.OPENAI_API_KEY;

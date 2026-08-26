@@ -143,7 +143,7 @@ export type SemanticAnalysis = {
   };
   appearance: { outfit?: string; hair?: string; makeup?: string; accessories?: string };
   confidence: number;
-  provider: "openai" | "gemini" | "mock";
+  provider: "dashscope" | "openai" | "gemini" | "mock";
   warnings: string[];
 };
 

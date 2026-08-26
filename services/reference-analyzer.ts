@@ -12,11 +12,11 @@ function inferCoverage(framing: string): BodyCoverage {
   return "upper_body";
 }
 
-function semanticProvenance(provider: "openai" | "gemini" | "mock", confidence: number): FieldProvenance {
+function semanticProvenance(provider: "dashscope" | "openai" | "gemini" | "mock", confidence: number): FieldProvenance {
   return {
     source: provider === "mock" ? "mock" : "vlm",
     available: true,
-    capability: provider === "mock" ? "semantic-mock" : `${provider}-vision`,
+    capability: provider === "mock" ? "semantic-mock" : provider === "dashscope" ? "dashscope-qwen-vision" : `${provider}-vision`,
     confidence,
   };
 }

@@ -9,9 +9,9 @@ npm install
 npm run dev
 ```
 
-复制 `.env.example` 为 `.env.local`。Reference Semantic Analyzer 默认使用 `ANALYZER_PROVIDER=mock`，无需 API Key 即可运行；切换到 `openai` 或 `gemini` 时，对应配置 `OPENAI_API_KEY` 或 `GEMINI_API_KEY`。密钥只由 `app/api/analyze/route.ts` 在服务端读取，不进入浏览器包。
+复制 `.env.example` 为 `.env.local`。配置 `DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL` 和 `DASHSCOPE_ANALYZER_MODEL` 后，Reference Semantic Analyzer 会通过服务端调用 DashScope/Qwen 视觉模型。`ANALYZER_PROVIDER` 是可选覆盖项；未设置时会结合 `AI_PROVIDER` 和已配置的 Key 自动选择，优先使用 DashScope。密钥只由 `app/api/analyze/route.ts` 在服务端读取，不进入浏览器包。
 
-远程 VLM 请求还需要配置 `APP_ACCESS_CODE`。用户输入的访问码由浏览器通过请求头发送，避免公开部署被匿名消耗额度。图片生成仍独立使用现有 `AI_PROVIDER` 配置。
+远程 VLM 请求还需要配置 `APP_ACCESS_CODE`。用户在首页输入体验访问码后，访问码只保存在当前浏览器会话，并通过请求头发送，避免公开部署被匿名消耗额度。图片生成仍独立使用现有 `AI_PROVIDER` 配置。
 
 ## Reference Analyzer
 
@@ -22,7 +22,7 @@ Reference media
   │    ├─ FaceDetector when browser capability exists
   │    └─ explicitly-labelled geometry heuristics
   ├─ Semantic Analyzer (server proxy)
-  │    ├─ OpenAI / Gemini structured JSON
+  │    ├─ DashScope/Qwen（主路径）或 OpenAI / Gemini structured JSON
   │    └─ automatic Mock fallback
   └─ Fusion
        ├─ real geometry wins
@@ -40,7 +40,7 @@ Reference media
 | 视频宽高、时长、代表帧 | 已实现 | 浏览器解码并抽取首段代表帧 |
 | 人脸数量、主脸 Bounding Box | 条件可用 | 浏览器支持 Shape Detection `FaceDetector` 时真实执行 |
 | 人物区域、人物位置、Body Coverage | 启发式 | 基于真实人脸框估算，明确标记 `geometry-heuristic` |
-| 场景、构图、机位、视线、表情、姿态、外观 | 已实现 | OpenAI / Gemini VLM；无 Key 或失败时 Mock fallback |
+| 场景、构图、机位、视线、表情、姿态、外观 | 已实现 | DashScope/Qwen、OpenAI 或 Gemini VLM；无 Key 或失败时 Mock fallback |
 | Structured JSON 校验 | 已实现 | 服务端 schema 约束 + 防御性解析；失败返回 warning |
 | MediaPipe Face / Pose Landmarker | 已预留 | adapter capability 为 false，本版未引入额外 WASM/模型包体 |
 | Person Segmentation / Mask | 未实现 | adapter capability 为 false |
@@ -53,7 +53,7 @@ Reference media
 - `services/semantic-analyzer.ts`：浏览器端 VLM adapter、响应校验与本地 Mock fallback
 - `services/reference-analyzer.ts`：Geometry + Semantic Fusion、TargetShot 派生
 - `services/requirement-planner.ts`：从 `ReferenceAnalysis` 规划 Simple / Standard / Advanced 采集
-- `app/api/analyze/route.ts`：OpenAI / Gemini 服务端代理、structured JSON 与自动 Mock fallback
+- `app/api/analyze/route.ts`：DashScope/Qwen、OpenAI、Gemini 服务端代理，structured JSON 与自动 Mock fallback
 - `components/guided-capture.tsx`：相机引导、自动抓帧和权限回退
 - `services/capture-quality.ts`：浏览器端亮度、清晰度与最佳帧选择
 

@@ -48,7 +48,7 @@ function isSemanticAnalysis(value: unknown): value is SemanticAnalysis {
     typeof result.shot.cameraAngle === "string" && typeof result.shot.framing === "string" && typeof result.shot.gaze === "string" &&
     typeof result.shot.expression === "string" && typeof result.shot.poseSummary === "string" &&
     orientations.includes(result.shot.bodyOrientation as BodyOrientation) && result.appearance &&
-    typeof result.confidence === "number" && ["openai", "gemini", "mock"].includes(String(result.provider)) && Array.isArray(result.warnings)
+    typeof result.confidence === "number" && ["dashscope", "openai", "gemini", "mock"].includes(String(result.provider)) && Array.isArray(result.warnings)
   );
 }
 
