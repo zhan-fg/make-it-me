@@ -1,4 +1,4 @@
-import type { AnalyzerAdapter, GeneratorAdapter } from "./types";
+import type { GeneratorAdapter } from "./types";
 
 async function request<T>(url: string, body: unknown): Promise<T> {
   const accessCode = window.sessionStorage.getItem("make-it-me-access-code") || "";
@@ -11,12 +11,6 @@ async function request<T>(url: string, body: unknown): Promise<T> {
   if (!response.ok) throw new Error(payload.error || "请求失败，请稍后重试");
   return payload;
 }
-
-export const apiAnalyzer: AnalyzerAdapter = {
-  analyze(image) {
-    return request("/api/analyze", { image });
-  },
-};
 
 export const apiGenerator: GeneratorAdapter = {
   generate(input) {

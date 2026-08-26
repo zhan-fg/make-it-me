@@ -1,11 +1,72 @@
 export type CaptureMode = "simple" | "standard" | "advanced";
+export type MediaType = "image" | "video";
+export type ShotType = "close_up" | "medium" | "full" | "motion";
 export type BodyCoverage = "face" | "upper_body" | "three_quarter" | "full_body";
 export type BodyOrientation = "front" | "side" | "back_three_quarter" | "back";
+export type AnalysisSource = "browser-metadata" | "browser-face-detector" | "geometry-heuristic" | "vlm" | "mock" | "unavailable";
+
+export type NormalizedBoundingBox = { x: number; y: number; width: number; height: number };
+export type FieldProvenance = {
+  source: AnalysisSource;
+  available: boolean;
+  capability: string;
+  confidence?: number;
+  note?: string;
+};
+
+export type ReferenceAnalysis = {
+  id: string;
+  reference: { mediaType: MediaType; width?: number; height?: number; duration?: number };
+  scene: {
+    summary: string;
+    preserveRecommended: boolean;
+    subjectRegion?: NormalizedBoundingBox;
+    backgroundRegion?: string;
+    depthAvailable: boolean;
+    occlusionAvailable: boolean;
+    lightingContext?: string;
+  };
+  shot: {
+    shotType: ShotType;
+    subjectPosition: string;
+    composition: string;
+    cameraAngle: string;
+    framing: string;
+    face: {
+      yaw: number | null;
+      pitch: number | null;
+      roll: number | null;
+      visibility: number | null;
+      gaze: string;
+      expression: string;
+    };
+    body: {
+      coverage: BodyCoverage;
+      orientation: BodyOrientation;
+      poseSummary: string;
+      keypointsAvailable: boolean;
+    };
+    interaction?: string;
+  };
+  appearance: { outfit?: string; hair?: string; makeup?: string; accessories?: string };
+  geometry: {
+    personBoundingBox?: NormalizedBoundingBox;
+    faceBoundingBox?: NormalizedBoundingBox;
+    faceCount?: number;
+    personMaskAvailable: boolean;
+    bodyKeypointsAvailable: boolean;
+    headPoseAvailable: boolean;
+  };
+  confidence: number;
+  warnings: string[];
+  provenance: Record<string, FieldProvenance>;
+  timeline?: Array<{ timeSeconds: number; poseSummary?: string; faceYaw?: number }>;
+};
 
 export type TargetShot = {
   id: string;
-  shotType: "close_up" | "medium" | "full" | "motion";
-  mediaType: "image" | "video";
+  shotType: ShotType;
+  mediaType: MediaType;
   face: { yaw: number; pitch: number; roll: number; visibility: number };
   body: { coverage: BodyCoverage; orientation: BodyOrientation };
   scene: string;
@@ -60,15 +121,30 @@ export type CaptureResult = {
 export type EphemeralIdentitySession = {
   id: string;
   createdAt: number;
+  referenceAnalysis: ReferenceAnalysis;
   targetShot: TargetShot;
   requirement: IdentityRequirement;
   capture?: CaptureResult;
   scope: "session";
 };
 
-export type AnalysisResult = {
-  scene: { title: string; detail: string; confidence: number };
-  shot: Array<{ label: string; value: string }>;
+export type SemanticAnalysis = {
+  scene: { summary: string; preserveRecommended: boolean; backgroundRegion?: string; lightingContext?: string };
+  shot: {
+    subjectPosition: string;
+    composition: string;
+    cameraAngle: string;
+    framing: string;
+    gaze: string;
+    expression: string;
+    poseSummary: string;
+    bodyOrientation: BodyOrientation;
+    interaction?: string;
+  };
+  appearance: { outfit?: string; hair?: string; makeup?: string; accessories?: string };
+  confidence: number;
+  provider: "openai" | "gemini" | "mock";
+  warnings: string[];
 };
 
 export type GenerationRequest = {
@@ -82,8 +158,22 @@ export type GenerationRequest = {
 
 export type GenerationResult = { id: string; imageUrl: string };
 
-export interface AnalyzerAdapter {
-  analyze(image: string): Promise<AnalysisResult>;
+export interface GeometryAnalyzerAdapter {
+  detectCapabilities(): { imageDimensions: boolean; faceDetector: boolean; bodyKeypoints: boolean; headPose: boolean; personSegmentation: boolean; depth: boolean; occlusion: boolean };
+  analyze(input: { source?: string; mediaType: MediaType }): Promise<GeometryAnalysis>;
+}
+
+export type GeometryAnalysis = {
+  reference: ReferenceAnalysis["reference"];
+  geometry: ReferenceAnalysis["geometry"];
+  inferred: { subjectPosition?: string; coverage?: BodyCoverage; framing?: string; shotType?: ShotType; faceVisibility?: number; subjectRegion?: NormalizedBoundingBox };
+  representativeFrame?: string;
+  provenance: Record<string, FieldProvenance>;
+  warnings: string[];
+};
+
+export interface SemanticAnalyzerAdapter {
+  analyze(input: { image?: string; mediaType: MediaType; referenceId?: string }): Promise<SemanticAnalysis>;
 }
 
 export interface GeneratorAdapter {

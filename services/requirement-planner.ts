@@ -1,13 +1,27 @@
-import type { CaptureInstruction, IdentityRequirement, TargetShot } from "./types";
+import type { CaptureInstruction, IdentityRequirement, ReferenceAnalysis, TargetShot } from "./types";
 
-export function planIdentityRequirement(target: TargetShot): IdentityRequirement {
-  const absoluteYaw = Math.abs(target.face.yaw);
-  const needsFullBody = target.body.coverage === "full_body";
-  const advanced = target.shotType === "motion" && (absoluteYaw >= 50 || needsFullBody || target.body.orientation === "back_three_quarter");
-  const simple = target.mediaType === "image" && absoluteYaw < 20 && !needsFullBody && target.face.visibility >= 0.9;
+function plannerInput(input: ReferenceAnalysis | TargetShot) {
+  if ("reference" in input) return {
+    mediaType: input.reference.mediaType,
+    shotType: input.shot.shotType,
+    yaw: input.shot.face.yaw,
+    visibility: input.shot.face.visibility,
+    coverage: input.shot.body.coverage,
+    orientation: input.shot.body.orientation,
+  };
+  return { mediaType: input.mediaType, shotType: input.shotType, yaw: input.face.yaw, visibility: input.face.visibility, coverage: input.body.coverage, orientation: input.body.orientation };
+}
+
+export function planIdentityRequirement(input: ReferenceAnalysis | TargetShot): IdentityRequirement {
+  const target = plannerInput(input);
+  const absoluteYaw = target.yaw === null ? 0 : Math.abs(target.yaw);
+  const needsFullBody = target.coverage === "full_body";
+  const advanced = target.shotType === "motion" && (absoluteYaw >= 50 || needsFullBody || target.orientation === "back_three_quarter" || target.orientation === "back");
+  const simple = target.mediaType === "image" && absoluteYaw < 20 && !needsFullBody && target.orientation === "front" && (target.visibility === null || target.visibility >= 0.9);
   if (simple) return { mode: "simple", reason: "这个镜头以清晰正脸为主，一张自拍就够了。", faceViews: ["front"], needsFullBody: false, captureDurationSeconds: 0, bestFrameCount: 1, materials: ["1 张清晰自拍"] };
-  if (advanced) return { mode: "advanced", reason: "镜头包含回头或较大角度变化，需要多角度信息来保持自然。", faceViews: ["front", target.face.yaw >= 0 ? "right_45" : "left_45", target.face.yaw >= 0 ? "right_profile" : "left_profile"], needsFullBody, captureDurationSeconds: 9, bestFrameCount: 3, materials: ["8–10 秒多角度头部采集", ...(needsFullBody ? ["1 张全身参考"] : [])] };
-  return { mode: "standard", reason: "人物有明显侧脸或动作变化，补充几个角度会更像你。", faceViews: ["front", target.face.yaw >= 0 ? "right_45" : "left_45"], needsFullBody, captureDurationSeconds: 4, bestFrameCount: 2, materials: ["3–5 秒引导式头部采集", ...(needsFullBody ? ["1 张全身参考"] : [])] };
+  const turnsRight = (target.yaw ?? (target.orientation === "side" ? 35 : 0)) >= 0;
+  if (advanced) return { mode: "advanced", reason: "镜头包含回头或较大动作变化，需要多角度信息来保持自然。", faceViews: ["front", turnsRight ? "right_45" : "left_45", turnsRight ? "right_profile" : "left_profile"], needsFullBody, captureDurationSeconds: 9, bestFrameCount: 3, materials: ["8–10 秒多角度头部采集", ...(needsFullBody ? ["1 张全身参考"] : [])] };
+  return { mode: "standard", reason: "人物有明显侧向姿态或动作变化，补充几个角度会更像你。", faceViews: ["front", turnsRight ? "right_45" : "left_45"], needsFullBody, captureDurationSeconds: 4, bestFrameCount: 2, materials: ["3–5 秒引导式头部采集", ...(needsFullBody ? ["1 张全身参考"] : [])] };
 }
 
 export function buildCaptureInstructions(requirement: IdentityRequirement): CaptureInstruction[] {

@@ -4,9 +4,9 @@ import { useRef, useState } from "react";
 import { IconArrowRight, IconCamera, IconCheck, IconChevronRight, IconDownload, IconLock, IconRefresh, IconShare3, IconSparkles } from "@tabler/icons-react";
 import { GuidedCapture } from "@/components/guided-capture";
 import { generatorAdapter } from "@/services/generator-adapter";
+import { deriveTargetShot, referenceAnalyzer } from "@/services/reference-analyzer";
 import { planIdentityRequirement } from "@/services/requirement-planner";
-import { shotAnalyzer } from "@/services/shot-analyzer";
-import type { CaptureResult, EphemeralIdentitySession, IdentityRequirement, TargetShot } from "@/services/types";
+import type { CaptureResult, EphemeralIdentitySession, IdentityRequirement, ReferenceAnalysis, TargetShot } from "@/services/types";
 
 type View = "discover" | "analyzing" | "requirements" | "capture" | "review" | "generating" | "result" | "appearance";
 type Reference = { id: string; title: string; detail: string; mediaType: "image" | "video"; source?: string; colors: string };
@@ -25,6 +25,7 @@ const modeLabels = { simple: "轻量采集", standard: "引导采集", advanced:
 export default function Home() {
   const [view, setView] = useState<View>("discover");
   const [reference, setReference] = useState<Reference>();
+  const [referenceAnalysis, setReferenceAnalysis] = useState<ReferenceAnalysis>();
   const [targetShot, setTargetShot] = useState<TargetShot>();
   const [requirement, setRequirement] = useState<IdentityRequirement>();
   const [session, setSession] = useState<EphemeralIdentitySession>();
@@ -34,10 +35,12 @@ export default function Home() {
 
   const analyzeReference = async (nextReference: Reference) => {
     setReference(nextReference); setView("analyzing");
-    const shot = await shotAnalyzer.analyze(nextReference.id, nextReference.mediaType);
-    const planned = planIdentityRequirement(shot);
+    const analysis = await referenceAnalyzer.analyze({ id: nextReference.id, source: nextReference.source, mediaType: nextReference.mediaType });
+    const shot = deriveTargetShot(analysis);
+    const planned = planIdentityRequirement(analysis);
+    setReferenceAnalysis(analysis);
     setTargetShot(shot); setRequirement(planned);
-    setSession({ id: `ephemeral-${Date.now()}`, createdAt: Date.now(), targetShot: shot, requirement: planned, scope: "session" });
+    setSession({ id: `ephemeral-${Date.now()}`, createdAt: Date.now(), referenceAnalysis: analysis, targetShot: shot, requirement: planned, scope: "session" });
     setView("requirements");
   };
 
@@ -60,7 +63,7 @@ export default function Home() {
   };
 
   const reset = () => {
-    setReference(undefined); setTargetShot(undefined); setRequirement(undefined); setSession(undefined); setCapture(undefined); setResultImage(undefined); setView("discover");
+    setReference(undefined); setReferenceAnalysis(undefined); setTargetShot(undefined); setRequirement(undefined); setSession(undefined); setCapture(undefined); setResultImage(undefined); setView("discover");
     if (fileInput.current) fileInput.current.value = "";
   };
 
@@ -69,7 +72,7 @@ export default function Home() {
     <Header view={view} home={reset} appearance={() => setView("appearance")} />
     {view === "discover" && <Discover upload={() => fileInput.current?.click()} select={analyzeReference} />}
     {view === "analyzing" && <Analyzing reference={reference} />}
-    {view === "requirements" && targetShot && requirement && <Requirements reference={reference} target={targetShot} requirement={requirement} start={() => setView("capture")} appearance={() => setView("appearance")} />}
+    {view === "requirements" && referenceAnalysis && targetShot && requirement && <Requirements reference={reference} analysis={referenceAnalysis} target={targetShot} requirement={requirement} start={() => setView("capture")} appearance={() => setView("appearance")} />}
     {view === "capture" && requirement && <GuidedCapture requirement={requirement} onComplete={completeCapture} onCancel={() => setView("requirements")} />}
     {view === "review" && capture && requirement && <CaptureReview capture={capture} requirement={requirement} retake={() => setView("capture")} continueFlow={generate} />}
     {view === "generating" && <Generating reference={reference} />}
@@ -88,11 +91,74 @@ function Discover({ upload, select }: { upload: () => void; select: (reference: 
 }
 
 function Analyzing({ reference }: { reference?: Reference }) {
-  return <Page><div className="grid min-h-[620px] place-items-center"><div className="w-full max-w-lg text-center"><ReferenceView reference={reference} className="mx-auto h-[330px] w-[250px] rounded-[28px]"/><div className="mx-auto mt-7 h-1.5 w-48 overflow-hidden rounded-full bg-white"><div className="h-full w-1/2 animate-pulse rounded-full bg-[#7655d6]"/></div><h1 className="mt-5 text-2xl font-semibold">正在看懂这个镜头</h1><p className="mt-2 text-sm text-[#757575]">分析人物角度、画面范围和动作变化…</p><p className="mt-5 text-[11px] text-[#8b8b91]">Demo 使用前端 Mock Shot Analyzer，不会识别人物身份</p></div></div></Page>;
+  return <Page>
+    <div className="grid min-h-[620px] place-items-center">
+      <div className="w-full max-w-lg text-center">
+        <ReferenceView reference={reference} className="mx-auto h-[330px] w-[250px] rounded-[28px]"/>
+        <div className="mx-auto mt-7 h-1.5 w-48 overflow-hidden rounded-full bg-white"><div className="h-full w-1/2 animate-pulse rounded-full bg-[#7655d6]"/></div>
+        <h1 className="mt-5 text-2xl font-semibold">正在看懂这个镜头</h1>
+        <p className="mt-2 text-sm text-[#757575]">读取画面几何，并分析场景、构图和动作语义…</p>
+        <p className="mt-5 text-[11px] text-[#8b8b91]">检测能力不可用时会明确降级，不会把 Mock 当作真实识别</p>
+      </div>
+    </div>
+  </Page>;
 }
 
-function Requirements({ reference, target, requirement, start, appearance }: { reference?: Reference; target: TargetShot; requirement: IdentityRequirement; start: () => void; appearance: () => void }) {
-  return <Page><div className="mb-6"><span className="text-xs text-[#7655d6]">镜头分析完成</span><h1 className="mt-2 text-[32px] font-bold tracking-[-.03em] sm:text-[38px]">这次，只需要这些。</h1><p className="mt-2 text-[15px] text-[#757575]">我们根据镜头自动选择了最低成本的采集方式。</p></div><div className="grid gap-6 lg:grid-cols-[1fr_1.05fr]"><div><ReferenceView reference={reference} className="h-[460px] rounded-[28px]"/><div className="mt-3 flex flex-wrap gap-2">{target.consumerSummary.map((item) => <Pill key={item}>{item}</Pill>)}</div></div><div className="space-y-4"><div className="rounded-[26px] bg-white p-5 sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] uppercase tracking-[.14em] text-[#8065cb]">{modeNames[requirement.mode]}</p><h2 className="mt-2 text-2xl font-semibold">{modeLabels[requirement.mode]}</h2></div><span className="rounded-full bg-[#ecffe1] px-3 py-1.5 text-xs text-[#477329]">已为你选择</span></div><p className="mt-4 text-sm leading-6 text-[#6f6f76]">{requirement.reason}</p><div className="mt-5 space-y-2.5">{requirement.materials.map((item) => <div key={item} className="flex items-center gap-3 rounded-2xl bg-[#f5f5f7] p-4"><span className="grid h-7 w-7 place-items-center rounded-full bg-[#1d1d21] text-white"><IconCheck size={14}/></span><span className="text-sm font-medium">{item}</span></div>)}</div><div className="mt-5 flex items-start gap-3 rounded-2xl bg-[#f4efff] p-4"><IconLock size={18} className="mt-0.5 shrink-0 text-[#7655d6]"/><div><b className="text-sm">仅用于本次生成</b><p className="mt-1 text-xs leading-5 text-[#6f6880]">不会自动保存到“我的形象”。当前 Demo 在完成或重置流程时清空页面会话中的临时素材。</p></div></div><button onClick={start} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1d1d21] py-4 text-[15px] font-semibold text-white">开始采集 <IconArrowRight size={18}/></button></div><button onClick={appearance} className="flex w-full items-center justify-between rounded-[20px] bg-white/65 p-4 text-left"><span><b className="text-sm">已有“我的形象”？</b><span className="ml-2 text-xs text-[#77777e]">可选复用，不是必需</span></span><IconChevronRight size={18}/></button><details className="rounded-[20px] bg-white/65 p-4 text-xs"><summary className="cursor-pointer font-medium">开发 / 高级信息</summary><pre className="mt-4 max-h-72 overflow-auto rounded-2xl bg-[#202024] p-4 text-[10px] leading-5 text-[#d8ff70]">{JSON.stringify({ targetShot: target, identityRequirement: requirement }, null, 2)}</pre><p className="mt-3 text-[#77777e]">当前 Target Shot Analysis 为前端 Mock；Requirement Planner 为确定性规则。</p></details></div></div></Page>;
+function sourceLabel(source: ReferenceAnalysis["provenance"][string]["source"]) {
+  return {
+    "browser-metadata": "真实媒体信息",
+    "browser-face-detector": "真实浏览器 CV",
+    "geometry-heuristic": "几何启发式",
+    vlm: "VLM",
+    mock: "Mock",
+    unavailable: "不可用",
+  }[source];
+}
+
+function Requirements({ reference, analysis, target, requirement, start, appearance }: { reference?: Reference; analysis: ReferenceAnalysis; target: TargetShot; requirement: IdentityRequirement; start: () => void; appearance: () => void }) {
+  const detailRows = Object.entries(analysis.provenance).sort(([left], [right]) => left.localeCompare(right));
+  return <Page>
+    <div className="mb-6">
+      <span className="text-xs text-[#7655d6]">镜头分析完成</span>
+      <h1 className="mt-2 text-[32px] font-bold tracking-[-.03em] sm:text-[38px]">这次，只需要这些。</h1>
+      <p className="mt-2 text-[15px] text-[#757575]">我们根据镜头自动选择了最低成本的采集方式。</p>
+    </div>
+    <div className="grid gap-6 lg:grid-cols-[1fr_1.05fr]">
+      <div>
+        <ReferenceView reference={reference} className="h-[460px] rounded-[28px]"/>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {target.consumerSummary.map((item) => <Pill key={item}>{item}</Pill>)}
+          {analysis.scene.preserveRecommended && <Pill>原场景建议保留</Pill>}
+        </div>
+        <div className="mt-4 rounded-[20px] bg-white/65 p-4">
+          <p className="text-[11px] uppercase tracking-[.12em] text-[#8065cb]">REFERENCE SUMMARY</p>
+          <p className="mt-2 text-sm leading-6 text-[#4f4f56]">{analysis.scene.summary}</p>
+          {analysis.scene.lightingContext && <p className="mt-1 text-xs text-[#7a7a82]">{analysis.scene.lightingContext}</p>}
+        </div>
+      </div>
+      <div className="space-y-4">
+        <div className="rounded-[26px] bg-white p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div><p className="text-[11px] uppercase tracking-[.14em] text-[#8065cb]">{modeNames[requirement.mode]}</p><h2 className="mt-2 text-2xl font-semibold">{modeLabels[requirement.mode]}</h2></div>
+            <span className="rounded-full bg-[#ecffe1] px-3 py-1.5 text-xs text-[#477329]">已为你选择</span>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-[#6f6f76]">{requirement.reason}</p>
+          <div className="mt-5 space-y-2.5">{requirement.materials.map((item) => <div key={item} className="flex items-center gap-3 rounded-2xl bg-[#f5f5f7] p-4"><span className="grid h-7 w-7 place-items-center rounded-full bg-[#1d1d21] text-white"><IconCheck size={14}/></span><span className="text-sm font-medium">{item}</span></div>)}</div>
+          <div className="mt-5 flex items-start gap-3 rounded-2xl bg-[#f4efff] p-4"><IconLock size={18} className="mt-0.5 shrink-0 text-[#7655d6]"/><div><b className="text-sm">仅用于本次生成</b><p className="mt-1 text-xs leading-5 text-[#6f6880]">不会自动保存到“我的形象”。当前 Demo 在完成或重置流程时清空页面会话中的临时素材。</p></div></div>
+          <button onClick={start} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1d1d21] py-4 text-[15px] font-semibold text-white">开始采集 <IconArrowRight size={18}/></button>
+        </div>
+        <button onClick={appearance} className="flex w-full items-center justify-between rounded-[20px] bg-white/65 p-4 text-left"><span><b className="text-sm">已有“我的形象”？</b><span className="ml-2 text-xs text-[#77777e]">可选复用，不是必需</span></span><IconChevronRight size={18}/></button>
+        <details className="rounded-[20px] bg-white/65 p-4 text-xs">
+          <summary className="cursor-pointer font-medium">分析详情 / 开发信息</summary>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {detailRows.map(([field, meta]) => <div key={field} className="rounded-xl bg-white p-3"><div className="flex items-center justify-between gap-2"><code className="truncate text-[10px] text-[#5d5d65]">{field}</code><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] ${meta.source === "mock" || meta.source === "unavailable" ? "bg-[#fff1df] text-[#9a5d16]" : "bg-[#ecffe1] text-[#477329]"}`}>{sourceLabel(meta.source)}</span></div><p className="mt-2 text-[10px] text-[#85858d]">{meta.capability}{meta.note ? ` · ${meta.note}` : ""}</p></div>)}
+          </div>
+          {analysis.warnings.length > 0 && <div className="mt-3 rounded-xl bg-[#fff7e8] p-3 text-[10px] leading-5 text-[#8a641e]">{analysis.warnings.map((warning) => <p key={warning}>• {warning}</p>)}</div>}
+          <pre className="mt-4 max-h-72 overflow-auto rounded-2xl bg-[#202024] p-4 text-[10px] leading-5 text-[#d8ff70]">{JSON.stringify({ referenceAnalysis: analysis, targetShot: target, identityRequirement: requirement }, null, 2)}</pre>
+        </details>
+      </div>
+    </div>
+  </Page>;
 }
 
 function CaptureReview({ capture, requirement, retake, continueFlow }: { capture: CaptureResult; requirement: IdentityRequirement; retake: () => void; continueFlow: () => void }) {
