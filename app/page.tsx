@@ -136,13 +136,52 @@ function sourceLabel(source: ReferenceAnalysis["provenance"][string]["source"]) 
   }[source];
 }
 
+function bodyOrientationLabel(orientation: ReferenceAnalysis["shot"]["body"]["orientation"]) {
+  return { front: "人物正向", side: "人物侧向", back_three_quarter: "人物回头", back: "人物背向" }[orientation];
+}
+
+function analysisStatus(analysis: ReferenceAnalysis) {
+  const semantic = analysis.provenance["scene.summary"];
+  const face = analysis.provenance["geometry.faceBoundingBox"];
+  const pose = analysis.provenance["geometry.bodyKeypointsAvailable"];
+  return [
+    {
+      label: "语义分析",
+      value: semantic?.source === "vlm" ? "DashScope 成功" : semantic?.source === "mock" ? "Mock 降级" : "不可用",
+      good: semantic?.source === "vlm",
+      detail: semantic?.source === "vlm" ? `置信度 ${Math.round((semantic.confidence ?? analysis.confidence) * 100)}%` : semantic?.note ?? "未取得真实 VLM 结果",
+    },
+    {
+      label: "人脸几何",
+      value: face?.source === "mediapipe-face-landmarker" ? "MediaPipe 成功" : face?.source === "browser-face-detector" ? "浏览器 CV 成功" : "未检测到",
+      good: Boolean(face?.available),
+      detail: face?.available
+        ? `${analysis.geometry.faceCount ?? 0} 张脸 · yaw ${analysis.shot.face.yaw === null ? "—" : `${analysis.shot.face.yaw.toFixed(1)}°`}`
+        : face?.note ?? "没有可靠的人脸几何数据",
+    },
+    {
+      label: "人体姿态",
+      value: pose?.source === "mediapipe-pose-landmarker" ? "MediaPipe 成功" : "未检测到",
+      good: Boolean(pose?.available),
+      detail: pose?.available ? `${bodyOrientationLabel(analysis.shot.body.orientation)} · ${analysis.shot.body.poseSummary}` : pose?.note ?? "没有可靠的人体关键点",
+    },
+  ];
+}
+
 function Requirements({ reference, analysis, target, requirement, start, appearance }: { reference?: Reference; analysis: ReferenceAnalysis; target: TargetShot; requirement: IdentityRequirement; start: () => void; appearance: () => void }) {
   const detailRows = Object.entries(analysis.provenance).sort(([left], [right]) => left.localeCompare(right));
+  const statuses = analysisStatus(analysis);
   return <Page>
     <div className="mb-6">
       <span className="text-xs text-[#7655d6]">镜头分析完成</span>
       <h1 className="mt-2 text-[32px] font-bold tracking-[-.03em] sm:text-[38px]">这次，只需要这些。</h1>
       <p className="mt-2 text-[15px] text-[#757575]">我们根据镜头自动选择了最低成本的采集方式。</p>
+    </div>
+    <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      {statuses.map((status) => <div key={status.label} className="rounded-[20px] bg-white p-4">
+        <div className="flex items-center justify-between gap-3"><span className="text-xs text-[#77777e]">{status.label}</span><span className={`h-2.5 w-2.5 rounded-full ${status.good ? "bg-[#6fc447]" : "bg-[#e6a23c]"}`}/></div>
+        <p className="mt-2 text-sm font-semibold">{status.value}</p><p className="mt-1 truncate text-[11px] text-[#85858d]">{status.detail}</p>
+      </div>)}
     </div>
     <div className="grid gap-6 lg:grid-cols-[1fr_1.05fr]">
       <div>
@@ -164,6 +203,7 @@ function Requirements({ reference, analysis, target, requirement, start, appeara
             <span className="rounded-full bg-[#ecffe1] px-3 py-1.5 text-xs text-[#477329]">已为你选择</span>
           </div>
           <p className="mt-4 text-sm leading-6 text-[#6f6f76]">{requirement.reason}</p>
+          <p className={`mt-3 rounded-xl px-3 py-2 text-xs ${requirement.basis === "cv" ? "bg-[#ecffe1] text-[#477329]" : requirement.basis === "vlm" ? "bg-[#f0eaff] text-[#6547bd]" : "bg-[#fff1df] text-[#9a5d16]"}`}>{requirement.basisSummary}</p>
           <div className="mt-5 space-y-2.5">{requirement.materials.map((item) => <div key={item} className="flex items-center gap-3 rounded-2xl bg-[#f5f5f7] p-4"><span className="grid h-7 w-7 place-items-center rounded-full bg-[#1d1d21] text-white"><IconCheck size={14}/></span><span className="text-sm font-medium">{item}</span></div>)}</div>
           <div className="mt-5 flex items-start gap-3 rounded-2xl bg-[#f4efff] p-4"><IconLock size={18} className="mt-0.5 shrink-0 text-[#7655d6]"/><div><b className="text-sm">仅用于本次生成</b><p className="mt-1 text-xs leading-5 text-[#6f6880]">不会自动保存到“我的形象”。当前 Demo 在完成或重置流程时清空页面会话中的临时素材。</p></div></div>
           <button onClick={start} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1d1d21] py-4 text-[15px] font-semibold text-white">开始采集 <IconArrowRight size={18}/></button>
