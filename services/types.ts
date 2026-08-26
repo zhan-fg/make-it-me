@@ -3,7 +3,7 @@ export type MediaType = "image" | "video";
 export type ShotType = "close_up" | "medium" | "full" | "motion";
 export type BodyCoverage = "face" | "upper_body" | "three_quarter" | "full_body";
 export type BodyOrientation = "front" | "side" | "back_three_quarter" | "back";
-export type AnalysisSource = "browser-metadata" | "browser-face-detector" | "geometry-heuristic" | "vlm" | "mock" | "unavailable";
+export type AnalysisSource = "browser-metadata" | "browser-face-detector" | "mediapipe-face-landmarker" | "mediapipe-pose-landmarker" | "geometry-heuristic" | "vlm" | "mock" | "unavailable";
 
 export type NormalizedBoundingBox = { x: number; y: number; width: number; height: number };
 export type FieldProvenance = {
@@ -67,7 +67,7 @@ export type TargetShot = {
   id: string;
   shotType: ShotType;
   mediaType: MediaType;
-  face: { yaw: number; pitch: number; roll: number; visibility: number };
+  face: { yaw: number | null; pitch: number | null; roll: number | null; visibility: number | null };
   body: { coverage: BodyCoverage; orientation: BodyOrientation };
   scene: string;
   consumerSummary: string[];
@@ -166,7 +166,19 @@ export interface GeometryAnalyzerAdapter {
 export type GeometryAnalysis = {
   reference: ReferenceAnalysis["reference"];
   geometry: ReferenceAnalysis["geometry"];
-  inferred: { subjectPosition?: string; coverage?: BodyCoverage; framing?: string; shotType?: ShotType; faceVisibility?: number; subjectRegion?: NormalizedBoundingBox };
+  inferred: {
+    subjectPosition?: string;
+    coverage?: BodyCoverage;
+    framing?: string;
+    shotType?: ShotType;
+    faceVisibility?: number;
+    faceYaw?: number;
+    facePitch?: number;
+    faceRoll?: number;
+    bodyOrientation?: BodyOrientation;
+    poseSummary?: string;
+    subjectRegion?: NormalizedBoundingBox;
+  };
   representativeFrame?: string;
   provenance: Record<string, FieldProvenance>;
   warnings: string[];
