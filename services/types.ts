@@ -76,6 +76,8 @@ export type TargetShot = {
 export type IdentityRequirement = {
   mode: CaptureMode;
   reason: string;
+  basis: "cv" | "vlm" | "fallback";
+  basisSummary: string;
   faceViews: Array<"front" | "left_45" | "right_45" | "left_profile" | "right_profile">;
   needsFullBody: boolean;
   captureDurationSeconds: number;
