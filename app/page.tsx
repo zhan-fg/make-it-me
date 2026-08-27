@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { IconArrowRight, IconCamera, IconCheck, IconChevronRight, IconDownload, IconLock, IconRefresh, IconShare3, IconSparkles } from "@tabler/icons-react";
 import { GuidedCapture } from "@/components/guided-capture";
 import { generatorAdapter } from "@/services/generator-adapter";
@@ -112,24 +112,7 @@ function Header({ view, home, appearance }: { view: View; home: () => void; appe
   return <header className="mx-auto flex h-[70px] max-w-[1280px] items-center gap-4 px-4 sm:h-[82px] sm:px-6 lg:px-0"><button onClick={home} className="flex items-center gap-2.5"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#1a1a1f] text-white"><IconSparkles size={15}/></span><b className="whitespace-nowrap text-base sm:text-lg">Make it me</b></button><div className="flex-1"/><nav className="flex items-center gap-4 text-xs sm:gap-7 sm:text-sm"><button className={view === "discover" ? "font-medium" : "text-[#757575]"} onClick={home}>发现</button><button className={view === "result" ? "font-medium" : "hidden text-[#757575] sm:block"}>我的作品</button><button className={view === "appearance" ? "font-medium" : "text-[#757575]"} onClick={appearance}>我的形象</button><span className="h-[32px] w-[32px] rounded-full bg-[#ddccff]"/></nav></header>;
 }
 
-function AccessCodeField() {
-  const [value, setValue] = useState("");
-
-  useEffect(() => {
-    setValue(window.sessionStorage.getItem("make-it-me-access-code") || "");
-  }, []);
-
-  const update = (nextValue: string) => {
-    setValue(nextValue);
-    window.sessionStorage.setItem("make-it-me-access-code", nextValue);
-  };
-
-  return <label className="mt-3 block max-w-xs text-left">
-    <span className="sr-only">体验访问码</span>
-    <input type="password" value={value} onChange={(event) => update(event.target.value)} placeholder="输入体验访问码" autoComplete="current-password" className="w-full rounded-[14px] border border-white/80 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-[#929299] focus:border-[#7655d6]"/>
-    <span className="mt-1.5 block text-[10px] text-[#85858d]">仅保存在当前浏览器会话，用于授权 AI 分析与生成请求</span>
-  </label>;
-}
+function AccessCodeField() { return null; }
 
 function Discover({ upload, select }: { upload: () => void; select: (reference: Reference) => void }) {
   return <div className="mx-auto max-w-[1280px] px-4 pb-16 sm:px-6 lg:px-0"><section className="grid gap-5 pt-5 sm:pt-9 lg:min-h-[270px] lg:grid-cols-[1.25fr_.95fr] lg:gap-8"><div><span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3 py-1.5 text-xs text-[#6d589e]"><IconSparkles size={13}/>现在无需先创建长期形象</span><h1 className="mt-4 text-[40px] font-bold leading-[1.12] tracking-[-.045em] sm:text-[50px]">看到喜欢的，<br/>换你来拍。</h1><p className="mt-3 max-w-lg text-[15px] leading-6 text-[#757575]">AI 会先看懂这次镜头，再只向你索取真正需要的素材。用完本次流程即可清空。</p><button onClick={upload} className="mt-5 flex w-full items-center justify-center gap-2 rounded-[16px] bg-[#1a1a1f] px-[22px] py-[14px] text-[15px] text-white sm:w-auto"><IconCamera size={18}/>选择参考照片或视频</button><AccessCodeField/></div><div className="relative min-h-[210px] overflow-hidden rounded-[28px] bg-gradient-to-br from-[#eee4ff] to-[#cce6ff] p-[22px]"><p className="text-xs text-[#7157bd]">SMART CAPTURE</p><h2 className="mt-2 max-w-[330px] text-2xl font-bold leading-[1.3]">每个镜头，都有刚刚好的采集方式。</h2><div className="absolute bottom-5 left-5 right-5 grid grid-cols-3 gap-2">{[["1 张", "正脸自拍"], ["3–5 秒", "轻转头"], ["8–10 秒", "多角度"]].map(([a,b]) => <div key={a} className="rounded-2xl bg-white/55 p-3 backdrop-blur"><b className="text-sm">{a}</b><p className="mt-1 text-[10px] text-[#6c6c75]">{b}</p></div>)}</div></div></section><div className="mt-8 flex h-[58px] items-center justify-between"><div><h2 className="text-2xl font-bold">热门模板</h2><p className="mt-1 text-sm text-[#757575]">点一个，看看它需要怎么采集</p></div><button className="hidden text-sm sm:block">查看全部 →</button></div><div className="grid grid-cols-2 gap-2.5 lg:grid-cols-5">{templates.map((item) => <button key={item.id} onClick={() => select(item)} className="overflow-hidden rounded-[20px] border border-[#e5e5eb] bg-white text-left transition hover:-translate-y-1"><div className={`relative h-[220px] overflow-hidden bg-gradient-to-r sm:h-[258px] ${item.colors}`}><span className="absolute left-3 top-3 rounded-full bg-white/85 px-2.5 py-1 text-[10px]">{item.mediaType === "video" ? "视频" : "照片"}</span><div className="absolute left-[31%] top-[28%] h-[64%] w-[30%] rounded-[38px] bg-[#241f29]/75"/><div className="absolute -right-6 top-8 h-44 w-44 rounded-full bg-white/20"/></div><div className="p-3.5"><b className="text-[14px] font-medium">{item.title}</b><p className="mt-1 truncate text-[11px] text-[#757575]">{item.detail}</p></div></button>)}</div></div>;

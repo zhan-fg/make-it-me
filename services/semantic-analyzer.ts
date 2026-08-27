@@ -56,10 +56,9 @@ export const vlmSemanticAnalyzer: SemanticAnalyzerAdapter = {
   async analyze(input) {
     if (!input.image) return createMockSemanticAnalysis(input.referenceId, "没有可发送给 VLM 的代表帧");
     try {
-      const accessCode = window.sessionStorage.getItem("make-it-me-access-code") || "";
       const response = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-App-Access-Code": accessCode },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
       const payload: unknown = await response.json();
@@ -74,3 +73,4 @@ export const vlmSemanticAnalyzer: SemanticAnalyzerAdapter = {
     }
   },
 };
+

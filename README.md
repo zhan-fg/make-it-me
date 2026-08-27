@@ -11,7 +11,7 @@ npm run dev
 
 复制 `.env.example` 为 `.env.local`。配置 `DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL` 和 `DASHSCOPE_ANALYZER_MODEL` 后，Reference Semantic Analyzer 会通过服务端调用 DashScope/Qwen 视觉模型。`ANALYZER_PROVIDER` 是可选覆盖项；未设置时会结合 `AI_PROVIDER` 和已配置的 Key 自动选择，优先使用 DashScope。密钥只由 `app/api/analyze/route.ts` 在服务端读取，不进入浏览器包。
 
-远程 VLM 请求还需要配置 `APP_ACCESS_CODE`。用户在首页输入体验访问码后，访问码只保存在当前浏览器会话，并通过请求头发送，避免公开部署被匿名消耗额度。图片生成仍独立使用现有 `AI_PROVIDER` 配置。
+远程 VLM 与图片生成不再要求体验访问码。公开部署仍通过服务端请求频率限制和图片大小限制控制滥用，图片生成继续使用现有 `AI_PROVIDER` 配置。
 
 ## Reference Analyzer
 

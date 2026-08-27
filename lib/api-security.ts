@@ -3,10 +3,6 @@ type Bucket = { count: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
 
 export function guardApiRequest(request: Request, scope: "analyze" | "generate") {
-  const configuredCode = process.env.APP_ACCESS_CODE;
-  if (!configuredCode) return { error: "服务端尚未配置 APP_ACCESS_CODE", status: 503 };
-  if (request.headers.get("x-app-access-code") !== configuredCode) return { error: "体验访问码不正确", status: 401 };
-
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > 8_000_000) return { error: "图片总大小超过限制，请压缩后重试", status: 413 };
 
@@ -24,3 +20,4 @@ export function guardApiRequest(request: Request, scope: "analyze" | "generate")
   bucket.count += 1;
   return null;
 }
+

@@ -89,8 +89,7 @@ export const generatorAdapter = {
         hasMatchingExpressionFrame: frames.some((frame) => frame.instructionId === "expression" && frame.requestedMouthState === "teeth_visible"),
       },
     };
-    const accessCode = window.sessionStorage.getItem("make-it-me-access-code") || "";
-    const response = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json", "x-app-access-code": accessCode }, body: JSON.stringify(request) });
+    const response = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) });
     const text = await response.text();
     let payload: GenerationResult & { error?: string };
     try { payload = JSON.parse(text); } catch { throw new Error(response.status === 504 ? "图片生成超时，请稍后重试" : "生成服务返回了无法解析的响应"); }
