@@ -26,6 +26,9 @@ function plannerInput(input: ReferenceAnalysis | TargetShot) {
       mediaType: input.reference.mediaType,
       shotType: input.shot.shotType,
       yaw: input.shot.face.yaw,
+      pitch: input.shot.face.pitch,
+      roll: input.shot.face.roll,
+      faceRegion: input.geometry.faceBoundingBox,
       visibility: input.shot.face.visibility,
       coverage: input.shot.body.coverage,
       orientation: input.shot.body.orientation,
@@ -35,12 +38,16 @@ function plannerInput(input: ReferenceAnalysis | TargetShot) {
       hasPoseCv: Boolean(hasPoseCv),
       expression: input.shot.face.expression,
       gaze: input.shot.face.gaze,
+      poseSummary: input.shot.body.poseSummary,
     };
   }
   return {
     mediaType: input.mediaType,
     shotType: input.shotType,
     yaw: input.face.yaw,
+    pitch: input.face.pitch,
+    roll: input.face.roll,
+    faceRegion: undefined,
     visibility: input.face.visibility,
     coverage: input.body.coverage,
     orientation: input.body.orientation,
@@ -50,12 +57,14 @@ function plannerInput(input: ReferenceAnalysis | TargetShot) {
     hasPoseCv: false,
     expression: "自然表情",
     gaze: "自然看向镜头",
+    poseSummary: "沿用参考人物姿势",
   };
 }
 
 export function planIdentityRequirement(input: ReferenceAnalysis | TargetShot): IdentityRequirement {
   const target = plannerInput(input);
   const expression = expressionPlan(target.expression, target.gaze);
+  const poseTarget = { yaw: target.yaw, pitch: target.pitch, roll: target.roll, faceRegion: target.faceRegion, bodyOrientation: target.orientation, poseSummary: target.poseSummary, expression: target.expression, gaze: target.gaze };
   const absoluteYaw = target.yaw === null ? null : Math.abs(target.yaw);
   const needsFullBody = target.coverage === "three_quarter" || target.coverage === "full_body";
   const needsBodyContext = target.coverage !== "face";
@@ -66,7 +75,7 @@ export function planIdentityRequirement(input: ReferenceAnalysis | TargetShot): 
   if (simple) return {
     mode: "simple", reason: `MediaPipe 检测到清晰正脸（偏转约 ${Math.round(absoluteYaw)}°），一张自拍就够了。`,
     basis: "cv", basisSummary: "依据 MediaPipe 人脸框、头部姿态与可见度规划",
-    faceViews: ["front"], needsFullBody: false, captureDurationSeconds: expression.mouthState === "teeth_visible" ? 3 : 0, bestFrameCount: expression.mouthState === "teeth_visible" ? 2 : 1, materials: ["1 张清晰自拍", ...(expression.mouthState === "teeth_visible" ? ["1 张自然露齿微笑表情"] : [])], ...expression,
+    faceViews: ["front"], needsFullBody: false, captureDurationSeconds: 3, bestFrameCount: 1, materials: ["1 张与参考姿势匹配的自拍"], ...expression, poseTarget,
   };
   const turnsRight = (target.yaw ?? (target.orientation === "side" ? 35 : 0)) >= 0;
   const basis = target.hasHeadPoseCv || target.hasPoseCv ? "cv" : target.hasMock ? "fallback" : "vlm";
@@ -77,33 +86,20 @@ export function planIdentityRequirement(input: ReferenceAnalysis | TargetShot): 
     mode: "advanced", reason: needsBodyContext ? "完整人物替换需要同时采集头发、肩颈和身体比例。" : lowVisibility ? "人物面部可见度较低，需要更多角度来补足身份信息。" : "镜头包含回头或较大动作变化，需要多角度信息来保持自然。",
     basis, basisSummary,
     faceViews: ["front", turnsRight ? "right_45" : "left_45", turnsRight ? "right_profile" : "left_profile"], needsFullBody,
-    captureDurationSeconds: expression.mouthState === "teeth_visible" ? 11 : 9, bestFrameCount: expression.mouthState === "teeth_visible" ? 4 : 3, materials: ["8–10 秒多角度头部与肩颈采集", ...(expression.mouthState === "teeth_visible" ? ["1 张自然露齿微笑表情"] : []), ...(needsFullBody ? ["1 张包含体型和身体比例的全身参考"] : [])], ...expression,
+    captureDurationSeconds: 5, bestFrameCount: 1, materials: ["1 张与参考角度和姿势匹配的自拍", ...(needsFullBody ? ["1 张包含体型和身体比例的全身参考"] : [])], ...expression, poseTarget,
   };
   return {
     mode: "standard",
     reason: absoluteYaw === null ? "没有可靠的头部角度数据，因此使用多角度采集以避免误判。" : `人物存在约 ${Math.round(absoluteYaw)}° 的侧向变化，补充一个侧面角度会更像你。`,
     basis, basisSummary,
     faceViews: ["front", turnsRight ? "right_45" : "left_45"], needsFullBody,
-    captureDurationSeconds: expression.mouthState === "teeth_visible" ? 6 : 4, bestFrameCount: expression.mouthState === "teeth_visible" ? 3 : 2, materials: ["3–5 秒引导式头部采集", ...(expression.mouthState === "teeth_visible" ? ["1 张自然露齿微笑表情"] : []), ...(needsFullBody ? ["1 张全身参考"] : [])], ...expression,
+    captureDurationSeconds: 4, bestFrameCount: 1, materials: ["1 张与参考角度和姿势匹配的自拍", ...(needsFullBody ? ["1 张全身参考"] : [])], ...expression, poseTarget,
   };
 }
 
 export function buildCaptureInstructions(requirement: IdentityRequirement): CaptureInstruction[] {
-  const expressionInstruction: CaptureInstruction = { id: "expression", label: requirement.expressionGuidance, hint: `${requirement.gazeGuidance} · 保持 1.5 秒`, target: "expression", holdMs: 1700, mouthState: requirement.mouthState };
-  if (requirement.mode === "simple") return [
-    { id: "front", label: "看向镜头", hint: "保持自然闭嘴表情，我们会自动拍下", target: "front", holdMs: 1200, mouthState: "closed" },
-    ...(requirement.mouthState === "teeth_visible" ? [expressionInstruction] : []),
-  ];
-  const instructions: CaptureInstruction[] = [
-    { id: "front", label: "看向镜头", hint: "让脸保持在取景框中央", target: "front", holdMs: 1400 },
-    { id: "right", label: "再向右一点", hint: "慢慢转头，不需要转动身体", target: "right", holdMs: 1500 },
-    { id: "hold", label: "很好，保持一下", hint: "我们正在挑选最清晰的画面", target: "right", holdMs: 1300 },
-  ];
-  if (requirement.mode === "advanced") instructions.splice(2, 0,
-    { id: "left", label: "现在慢慢看向左边", hint: "动作放慢，会更容易捕捉", target: "left", holdMs: 1800 },
-    { id: "distance", label: "稍微退后一点", hint: "让肩膀也进入取景框", target: "distance", holdMs: 1600 },
-  );
-  if (requirement.mouthState === "teeth_visible" || requirement.mouthState === "slightly_open") instructions.push(expressionInstruction);
-  return instructions;
+  const target = requirement.poseTarget;
+  const yawHint = target.yaw === null ? "按照参考人物方向调整头部" : Math.abs(target.yaw) < 8 ? "保持正脸角度" : target.yaw > 0 ? `向右转约 ${Math.round(Math.abs(target.yaw))}°` : `向左转约 ${Math.round(Math.abs(target.yaw))}°`;
+  return [{ id: "target-pose", label: "复刻参考姿势", hint: `${yawHint} · ${requirement.expressionGuidance}`, target: "target_pose", holdMs: 2200, mouthState: requirement.mouthState }];
 }
 

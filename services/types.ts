@@ -102,6 +102,17 @@ export type TargetShot = {
   consumerSummary: string[];
 };
 
+export type PoseTarget = {
+  yaw: number | null;
+  pitch: number | null;
+  roll: number | null;
+  faceRegion?: NormalizedBoundingBox;
+  bodyOrientation: BodyOrientation;
+  poseSummary: string;
+  expression: string;
+  gaze: string;
+};
+
 export type IdentityRequirement = {
   mode: CaptureMode;
   reason: string;
@@ -115,13 +126,14 @@ export type IdentityRequirement = {
   expressionGuidance: string;
   gazeGuidance: string;
   mouthState: MouthState;
+  poseTarget: PoseTarget;
 };
 
 export type CaptureInstruction = {
   id: string;
   label: string;
   hint: string;
-  target: "front" | "left" | "right" | "distance" | "body" | "expression";
+  target: "target_pose" | "front" | "left" | "right" | "distance" | "body" | "expression";
   holdMs: number;
   mouthState?: MouthState;
 };
@@ -137,6 +149,7 @@ export type CaptureFrame = {
   faceBox?: NormalizedBoundingBox;
   faceLandmarks?: FacePoint[];
   originalDataUrl?: string;
+  targetPoseMatched?: boolean;
   quality: {
     faceCount: QualityMetric;
     faceSize: QualityMetric;
@@ -194,6 +207,7 @@ export type GenerationRequest = {
   referenceSize: { width: number; height: number };
   personEditMask: { image: string; source: "mediapipe-pose-envelope" | "geometry-envelope"; region: NormalizedBoundingBox };
   identityFrames: Array<{ image: string; view: string; qualityScore: number }>;
+  matchedUserPhoto: { image: string; poseMatchScore: number };
   fullBodyImage?: string;
   referenceAnalysis: ReferenceAnalysis;
   targetShot: TargetShot;

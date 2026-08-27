@@ -21,6 +21,8 @@ function validateInput(value: unknown): GenerationRequest {
   if (!input.personEditMask?.region) throw new Error("缺少人物编辑蒙版");
   validateImage(input.personEditMask.image, "人物编辑蒙版");
   input.identityFrames.forEach((frame, index) => validateImage(frame?.image, `身份关键帧 ${index + 1}`));
+  if (!input.matchedUserPhoto) throw new Error("缺少参考姿势匹配自拍");
+  validateImage(input.matchedUserPhoto.image, "参考姿势匹配自拍");
   if (input.fullBodyImage) validateImage(input.fullBodyImage, "全身参考");
   if (!input.referenceAnalysis || !input.targetShot) throw new Error("缺少镜头分析结果");
   if (!input.characterProfile || !input.photoScenario) throw new Error("缺少角色形象或场景配置");
@@ -74,7 +76,7 @@ function generationPrompt(input: GenerationRequest) {
   const character = input.characterProfile;
   const scenario = input.photoScenario;
   return [scenario.mode === "reference" ? "任务是对图1进行局部人物替换，不是重新创作场景，也不是多图拼接。图1是唯一的构图底图，输出必须保持图1的完整画布、宽高比和像素方向。" : "任务是以图1的镜头布局为基础创作目标人物写真。保持画布比例、人物位置、姿态和镜头距离，同时按指定场景重新生成环境；不是头像拼贴。",
-    `本次真人角色名为“${character.name || "我的角色"}”。图2及之后定义该角色的真实身份，以下妆造配置定义角色外观；身份优先级始终高于风格化。`,
+    `本次真人角色名为“${character.name || "我的角色"}”。图2是用户按照参考图角度和姿势拍摄的首要身份照片，姿势匹配评分为 ${input.matchedUserPhoto.poseMatchScore}%。优先使用图2的脸部角度、表情、视线、肩颈透视和用户身份，不得重新设计姿势。`,
     scenario.mode === "reference" ? "构图锁定为最高优先级：禁止裁切、扩图、缩放、重新取景、改变镜头焦段、改变相机距离、移动人物、放大头部、虚化或重绘背景。背景、前景、地平线、建筑、家具、道具及其位置必须与图1一致。" : "布局锁定为最高优先级：禁止裁切、扩图、缩放、移动人物或放大头部。允许根据指定场景重绘背景，但必须保持图1的人物占比、透视、前后景层次与空间关系。",
     compositionLock,
     "图2及之后的图片只能提供目标人物身份、头发、肤色和身体特征，绝不能提供背景、构图、人物尺寸、相机角度或画面风格。严禁把身份图中的头像直接粘贴到图1，严禁生成头像海报、证件照、大头照或氛围背景人像。",
@@ -115,7 +117,8 @@ async function generateWithWan(input: GenerationRequest) {
   const apiKey = process.env.DASHSCOPE_IMAGE_API_KEY || process.env.DASHSCOPE_API_KEY;
   if (!apiKey) throw new Error("服务端尚未配置 DASHSCOPE_IMAGE_API_KEY 或 DASHSCOPE_API_KEY");
   const model = process.env.DASHSCOPE_IMAGE_MODEL || "wan2.7-image";
-  const images = [input.referenceImage, ...input.identityFrames.map((frame) => frame.image), ...(input.fullBodyImage ? [input.fullBodyImage] : [])];
+  const remainingIdentity = input.identityFrames.map((frame) => frame.image).filter((image) => image !== input.matchedUserPhoto.image);
+  const images = [input.referenceImage, input.matchedUserPhoto.image, ...remainingIdentity, ...(input.fullBodyImage ? [input.fullBodyImage] : [])];
   if (images.length > 9) throw new Error("Wan2.7 最多接受 9 张参考图片");
   const startedAt = Date.now(); const size = outputSize(input); const region = normalizedPersonRegion(input);
   const replacement = await callWan(apiKey, model, images, generationPrompt(input), size.value, [regionBox(region, input.referenceSize.width, input.referenceSize.height)], 210_000);

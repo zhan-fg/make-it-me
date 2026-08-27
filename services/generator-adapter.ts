@@ -55,10 +55,11 @@ function createPersonEditMask(width: number, height: number, region: NormalizedB
 
 function bestIdentityFrames(capture: CaptureResult) {
   const ranked = [...capture.selectedFrames].sort((left, right) => right.quality.score - left.quality.score);
+  const matched = ranked.find((frame) => frame.instructionId === "target-pose" || frame.targetPoseMatched);
   const front = ranked.find((frame) => frame.instructionId === "front");
   const expression = ranked.find((frame) => frame.instructionId === "expression");
   const angle = ranked.find((frame) => !["front", "expression", "hold", "distance"].includes(frame.instructionId));
-  return [front, angle, expression, ...ranked.filter((frame) => frame !== front && frame !== angle && frame !== expression)]
+  return [matched, front, angle, expression, ...ranked.filter((frame) => frame !== matched && frame !== front && frame !== angle && frame !== expression)]
     .filter((frame): frame is NonNullable<typeof frame> => Boolean(frame))
     .slice(0, 3);
 }
@@ -68,6 +69,7 @@ export const generatorAdapter = {
     if (!reference) throw new Error("缺少参考素材，无法开始真实生成");
     const frames = bestIdentityFrames(capture);
     const [referenceMedia, ...identityMedia] = await Promise.all([normalizeImage(reference, referenceAnalysis.reference.mediaType), ...frames.map((frame) => normalizeImage(frame.dataUrl, "image", frame.faceBox))]);
+    const matchedIndex = Math.max(0, frames.findIndex((frame) => frame.instructionId === "target-pose" || frame.targetPoseMatched));
     const region = personRegion(referenceAnalysis);
     const maskSource = referenceAnalysis.geometry.bodyKeypointsAvailable ? "mediapipe-pose-envelope" as const : "geometry-envelope" as const;
     const request: GenerationRequest = {
@@ -77,6 +79,7 @@ export const generatorAdapter = {
       referenceSize: { width: referenceMedia.width, height: referenceMedia.height },
       personEditMask: createPersonEditMask(referenceMedia.width, referenceMedia.height, region, maskSource),
       identityFrames: frames.map((frame, index) => ({ image: identityMedia[index].image, view: frame.instructionId, qualityScore: frame.quality.score })),
+      matchedUserPhoto: { image: identityMedia[matchedIndex].image, poseMatchScore: frames[matchedIndex].quality.poseMatch.value || 0 },
       fullBodyImage: capture.fullBodyImage ? (await normalizeImage(capture.fullBodyImage)).image : undefined,
       referenceAnalysis, targetShot, characterProfile, photoScenario, preserveScene: photoScenario.mode === "reference", intensity: 85,
       expressionPolicy: {
