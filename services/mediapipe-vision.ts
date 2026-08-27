@@ -8,6 +8,7 @@ const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_lan
 export type VisionDetection = {
   faceCount: number;
   faceBox?: NormalizedBoundingBox;
+  faceLandmarks?: Array<{ x: number; y: number }>;
   personBox?: NormalizedBoundingBox;
   yaw?: number;
   pitch?: number;
@@ -73,7 +74,7 @@ function normalizeResults(faceResult: ReturnType<FaceLandmarker["detect"]>, pose
   if (faceResult.faceLandmarks.length) {
     const primaryIndex = faceResult.faceLandmarks.map((landmarks, index) => ({ index, box: landmarksBox(landmarks) })).sort((a, b) => b.box.width * b.box.height - a.box.width * a.box.height)[0].index;
     const landmarks = faceResult.faceLandmarks[primaryIndex]; const pose = matrixToEuler(faceResult.facialTransformationMatrixes[primaryIndex]);
-    detection.faceBox = landmarksBox(landmarks); detection.visibility = landmarks.reduce((sum, item) => sum + (item.visibility ?? 1), 0) / landmarks.length;
+    detection.faceBox = landmarksBox(landmarks); detection.faceLandmarks = landmarks.map(({ x, y }) => ({ x, y })); detection.visibility = landmarks.reduce((sum, item) => sum + (item.visibility ?? 1), 0) / landmarks.length;
     detection.yaw = pose?.yaw; detection.pitch = pose?.pitch; detection.roll = pose?.roll;
   }
   if (poseResult.landmarks.length) {
@@ -92,3 +93,4 @@ export async function detectVideo(source: HTMLVideoElement, timestamp = performa
   const { face, pose } = await getVideoLandmarkers();
   return normalizeResults(face.detectForVideo(source, timestamp), pose.detectForVideo(source, timestamp));
 }
+

@@ -7,6 +7,8 @@ export type MouthState = "neutral" | "closed" | "slightly_open" | "teeth_visible
 export type AnalysisSource = "browser-metadata" | "browser-face-detector" | "mediapipe-face-landmarker" | "mediapipe-pose-landmarker" | "geometry-heuristic" | "vlm" | "mock" | "unavailable";
 
 export type NormalizedBoundingBox = { x: number; y: number; width: number; height: number };
+export type FacePoint = { x: number; y: number };
+export type BeautySettings = { smoothing: number; brighten: number; slimFace: number; enlargeEyes: number };
 export type FieldProvenance = {
   source: AnalysisSource;
   available: boolean;
@@ -107,6 +109,8 @@ export type CaptureFrame = {
   instructionId: string;
   requestedMouthState?: MouthState;
   faceBox?: NormalizedBoundingBox;
+  faceLandmarks?: FacePoint[];
+  originalDataUrl?: string;
   quality: {
     faceCount: QualityMetric;
     faceSize: QualityMetric;
@@ -125,6 +129,7 @@ export type CaptureResult = {
   selectedFrames: CaptureFrame[];
   fullBodyImage?: string;
   detector: "mediapipe" | "browser-face-detector" | "local-quality-only";
+  beautySettings?: BeautySettings;
 };
 
 export type EphemeralIdentitySession = {
