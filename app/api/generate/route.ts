@@ -26,13 +26,28 @@ function validateInput(value: unknown): GenerationRequest {
   return input as GenerationRequest;
 }
 function personBoundingBox(input: GenerationRequest) {
-  const box = input.referenceAnalysis.geometry.personBoundingBox || input.referenceAnalysis.scene.subjectRegion;
-  if (!box) return undefined;
-  const paddingX = box.width * .12; const paddingTop = box.height * .08; const paddingBottom = box.height * .1;
-  const x1 = Math.max(0, Math.floor((box.x - paddingX) * input.referenceSize.width));
-  const y1 = Math.max(0, Math.floor((box.y - paddingTop) * input.referenceSize.height));
-  const x2 = Math.min(input.referenceSize.width, Math.ceil((box.x + box.width + paddingX) * input.referenceSize.width));
-  const y2 = Math.min(input.referenceSize.height, Math.ceil((box.y + box.height + paddingBottom) * input.referenceSize.height));
+  const person = input.referenceAnalysis.geometry.personBoundingBox || input.referenceAnalysis.scene.subjectRegion;
+  const face = input.referenceAnalysis.geometry.faceBoundingBox;
+  if (!person && !face) return undefined;
+  const hairRegion = face ? {
+    x: face.x - face.width * .8,
+    y: face.y - face.height * 1.25,
+    width: face.width * 2.6,
+    height: face.height * 4.1,
+  } : undefined;
+  const regions = [person, hairRegion].filter((region): region is NonNullable<typeof region> => Boolean(region));
+  const left = Math.min(...regions.map((region) => region.x));
+  const top = Math.min(...regions.map((region) => region.y));
+  const right = Math.max(...regions.map((region) => region.x + region.width));
+  const bottom = Math.max(...regions.map((region) => region.y + region.height));
+  const width = right - left; const height = bottom - top;
+  const paddingX = Math.max(width * .1, face?.width ? face.width * .35 : 0);
+  const paddingTop = Math.max(height * .05, face?.height ? face.height * .35 : 0);
+  const paddingBottom = height * .08;
+  const x1 = Math.max(0, Math.floor((left - paddingX) * input.referenceSize.width));
+  const y1 = Math.max(0, Math.floor((top - paddingTop) * input.referenceSize.height));
+  const x2 = Math.min(input.referenceSize.width, Math.ceil((right + paddingX) * input.referenceSize.width));
+  const y2 = Math.min(input.referenceSize.height, Math.ceil((bottom + paddingBottom) * input.referenceSize.height));
   return x2 > x1 && y2 > y1 ? [x1, y1, x2, y2] : undefined;
 }
 function generationPrompt(input: GenerationRequest) {
@@ -43,6 +58,7 @@ function generationPrompt(input: GenerationRequest) {
     `图2开始是同一目标人物的头肩身份参考，角度依次为：${input.identityFrames.map((frame) => frame.view).join("、")}。使用目标人物的完整头部身份：脸型、五官比例、眼睛、鼻子、嘴、耳朵、发际线、发型、发色、颈部与肤色。`,
     input.fullBodyImage ? "最后一张是目标人物全身参考。使用其真实体型、肩宽、身体比例和整体轮廓，同时复刻图1服装的款式、颜色与穿着关系。" : "根据头肩参考自然重建目标人物的肩颈与身体，不得沿用图1原人物的头发、肤色、体型或身体特征。",
     "重点保证头发与脸部属于同一目标人物，发际线自然，耳朵和脸颈肤色连续，头部光线与场景一致，严禁仅换脸或把目标人物的脸贴到图1原人物身体上。",
+    "完整清除图1原人物的全部头发、发色、发型轮廓、头顶碎发、鬓角、耳后发丝、肩部发梢和背部长发，不得出现双重发型、重影、残留发丝或两种发色。使用身份参考中目标人物的头发重新生成整个头部轮廓，并让发丝边缘与背景自然融合。",
     `场景还原强度约 ${Math.max(0, Math.min(100, input.intensity))}%。`, "保持自然人体结构、真实皮肤纹理和摄影质感；不要拼贴，不要多余人物，不要文字或水印。只输出一张最终照片。"].filter(Boolean).join("\n").slice(0, 5000);
 }
 async function generateWithWan(input: GenerationRequest) {
