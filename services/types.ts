@@ -10,7 +10,17 @@ export type NormalizedBoundingBox = { x: number; y: number; width: number; heigh
 export type FacePoint = { x: number; y: number };
 export type BeautySettings = { smoothing: number; brighten: number; slimFace: number; enlargeEyes: number };
 export type TransferStrength = "keep_self" | "inspired" | "match_reference";
+export type IdentityProfile = {
+  id: string;
+  name: string;
+  portrait: string;
+  identityFrames: string[];
+  fullBodyImage?: string;
+  source: "ephemeral-capture" | "saved-profile";
+};
 export type CharacterProfile = {
+  name?: string;
+  styleIds?: { makeup?: string; hair?: string; outfit?: string; accessories?: string };
   makeup: { description: string; strength: TransferStrength };
   hair: { description: string; strength: TransferStrength };
   outfit: { description: string; strength: TransferStrength };
