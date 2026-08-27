@@ -223,7 +223,7 @@ export type GenerationRequest = {
   };
 };
 
-export type GenerationResult = { id: string; imageUrl: string; provider: "dashscope"; model: string; elapsedMs: number; requestId?: string; refinementRequestId?: string; stages?: Array<{ name: "person-replacement" | "environment-refinement"; elapsedMs: number }> };
+export type GenerationResult = { id: string; imageUrl: string; provider: "dashscope"; model: string; elapsedMs: number; requestId?: string; refinementRequestId?: string; stages?: Array<{ name: "person-replacement" | "ai-beauty-refinement"; elapsedMs: number }> };
 
 export interface GeometryAnalyzerAdapter {
   detectCapabilities(): { imageDimensions: boolean; faceDetector: boolean; bodyKeypoints: boolean; headPose: boolean; personSegmentation: boolean; depth: boolean; occlusion: boolean };

@@ -97,7 +97,8 @@ function generationPrompt(input: GenerationRequest) {
     scenario.mode === "reference" ? `场景还原强度约 ${Math.max(95, Math.min(100, input.intensity))}%。` : "场景创作必须服从指定的场景、光线和摄影方案，同时保持参考布局。", "保持自然人体结构、真实皮肤纹理和摄影质感；不要拼贴，不要多余人物，不要文字或水印。只输出一张最终照片。"].filter(Boolean).join("\n").slice(0, 5000);
 }
 function refinementPrompt() {
-  return ["只在框选人物区域内进行环境融合精修，不改变人物身份、脸型、五官、发型、身体比例、姿态、表情、服装、构图或背景内容。",
+  return ["这是生成完成后的身份保护 AI 美颜与环境融合步骤。只在框选人物区域内精修，不改变人物身份、脸型骨骼、五官比例、发型轮廓、身体比例、姿态、表情、嘴型、牙齿、服装、构图或背景内容。",
+    "进行自然、克制的商业人像精修：均匀肤色，轻微减弱痘印、黑眼圈、局部泛红和明显皮肤瑕疵，保留毛孔与真实皮肤纹理；轻微改善面部曝光和气色。禁止瘦脸、大眼、改变鼻子、改变嘴唇、重做牙齿、过度磨皮、塑料皮肤或网红滤镜感。",
     "让人物与周围环境共享完全一致的曝光、白平衡、色温、主光方向、光比、阴影软硬度和环境反射色。",
     "匹配背景的景深、焦点、锐度、运动模糊、噪点、颗粒、压缩质感和镜头特征。修复头发、耳朵、肩膀、衣服与背景交界处的硬边、光晕和抠图感。",
     "补充人物与地面、座椅、墙面、道具之间合理的接触阴影、遮挡和反射。禁止重新生成背景，禁止改变脸部，禁止美颜、棚拍光、HDR或海报化。只输出融合后的原构图照片。"].join("\n");
@@ -122,14 +123,12 @@ async function generateWithWan(input: GenerationRequest) {
   if (images.length > 9) throw new Error("Wan2.7 最多接受 9 张参考图片");
   const startedAt = Date.now(); const size = outputSize(input); const region = normalizedPersonRegion(input);
   const replacement = await callWan(apiKey, model, images, generationPrompt(input), size.value, [regionBox(region, input.referenceSize.width, input.referenceSize.height)], 210_000);
-  const refinementEnabled = process.env.DASHSCOPE_ENABLE_REFINEMENT !== "false";
   const refinementBudget = 285_000 - (Date.now() - startedAt);
-  const refinement = refinementEnabled && refinementBudget >= 30_000
-    ? await callWan(apiKey, model, [replacement.imageUrl], refinementPrompt(), size.value, [regionBox(region, size.width, size.height)], refinementBudget)
-    : undefined;
-  return { id: replacement.requestId || `dashscope-${Date.now()}`, imageUrl: refinement?.imageUrl || replacement.imageUrl, provider: "dashscope" as const, model,
-    elapsedMs: Date.now() - startedAt, requestId: replacement.requestId, refinementRequestId: refinement?.requestId,
-    stages: [{ name: "person-replacement" as const, elapsedMs: replacement.elapsedMs }, ...(refinement ? [{ name: "environment-refinement" as const, elapsedMs: refinement.elapsedMs }] : [])] };
+  if (refinementBudget < 30_000) throw new Error("AI 美颜精修时间不足，请重试");
+  const refinement = await callWan(apiKey, model, [replacement.imageUrl], refinementPrompt(), size.value, [regionBox(region, size.width, size.height)], refinementBudget);
+  return { id: replacement.requestId || `dashscope-${Date.now()}`, imageUrl: refinement.imageUrl, provider: "dashscope" as const, model,
+    elapsedMs: Date.now() - startedAt, requestId: replacement.requestId, refinementRequestId: refinement.requestId,
+    stages: [{ name: "person-replacement" as const, elapsedMs: replacement.elapsedMs }, { name: "ai-beauty-refinement" as const, elapsedMs: refinement.elapsedMs }] };
 }
 export async function POST(request: Request) {
   try {
