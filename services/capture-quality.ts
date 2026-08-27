@@ -50,7 +50,7 @@ export async function evaluateFrame(canvas: HTMLCanvasElement, instructionId: st
   const poseGood = poseMatch === null || poseMatch >= 70;
   const confidenceGood = confidence === null || confidence >= 75;
   const score = Math.round((brightnessGood ? 20 : 10) + (sharpnessGood ? 24 : 10) + (faceGood ? 16 : 4) + (sizeGood ? 14 : 6) + (poseGood ? 18 : 5) + (confidenceGood ? 8 : 3));
-  return { id: `frame-${Date.now()}-${instructionId}`, dataUrl: canvas.toDataURL("image/jpeg", .9), capturedAt: Date.now(), instructionId, quality: { faceCount: metric(detectedFaces, faceGood), faceSize: metric(faceSize, sizeGood), sharpness: metric(sharpness, sharpnessGood), brightness: metric(brightness, brightnessGood), poseMatch: metric(poseMatch, poseGood), occlusion: { value: null, status: "unavailable" }, confidence: metric(confidence, confidenceGood), score } };
+  return { id: `frame-${Date.now()}-${instructionId}`, dataUrl: canvas.toDataURL("image/jpeg", .9), capturedAt: Date.now(), instructionId, faceBox: vision?.faceBox, quality: { faceCount: metric(detectedFaces, faceGood), faceSize: metric(faceSize, sizeGood), sharpness: metric(sharpness, sharpnessGood), brightness: metric(brightness, brightnessGood), poseMatch: metric(poseMatch, poseGood), occlusion: { value: null, status: "unavailable" }, confidence: metric(confidence, confidenceGood), score } };
 }
 
 export function selectBestFrames(candidates: CaptureFrame[], count: number) {
@@ -61,3 +61,4 @@ export function selectBestFrames(candidates: CaptureFrame[], count: number) {
   });
   return [...bestByInstruction.values()].sort((left, right) => right.quality.score - left.quality.score).slice(0, count);
 }
+

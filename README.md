@@ -59,6 +59,9 @@ Reference media
 - `services/requirement-planner.ts`：从 `ReferenceAnalysis` 规划 Simple / Standard / Advanced 采集
 - `app/api/analyze/route.ts`：DashScope/Qwen、OpenAI、Gemini 服务端代理，structured JSON 与自动 Mock fallback
 - `app/api/generate/route.ts`：服务端校验多图生成请求并调用 DashScope `wan2.7-image`
+- 当前生成模式固定为完整人物替换：保留场景、镜头和动作，替换脸部、头发、肤色、体型与身体比例，并复刻参考服装。
+- 生成请求在检测到人物框时使用 Wan2.7 `bbox_list` 限定完整人物区域，避免退化成仅换脸。
+- `DASHSCOPE_IMAGE_BASE_URL` / `DASHSCOPE_IMAGE_API_KEY` 可让图片生成独立使用其他地域；未配置时兼容原有共享变量。
 - `components/guided-capture.tsx`：相机引导、自动抓帧和权限回退
 - `services/capture-quality.ts`：浏览器端亮度、清晰度与最佳帧选择
 - `services/mediapipe-vision.ts`：共享 MediaPipe 模型加载、图片分析与相机 `VIDEO` 模式实时检测

@@ -100,6 +100,7 @@ export type CaptureFrame = {
   dataUrl: string;
   capturedAt: number;
   instructionId: string;
+  faceBox?: NormalizedBoundingBox;
   quality: {
     faceCount: QualityMetric;
     faceSize: QualityMetric;
@@ -150,7 +151,10 @@ export type SemanticAnalysis = {
 };
 
 export type GenerationRequest = {
+  replacementMode: "full_person";
+  clothingStrategy: "reference_outfit";
   referenceImage: string;
+  referenceSize: { width: number; height: number };
   identityFrames: Array<{ image: string; view: string; qualityScore: number }>;
   fullBodyImage?: string;
   referenceAnalysis: ReferenceAnalysis;

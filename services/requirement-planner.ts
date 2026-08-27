@@ -39,11 +39,12 @@ function plannerInput(input: ReferenceAnalysis | TargetShot) {
 export function planIdentityRequirement(input: ReferenceAnalysis | TargetShot): IdentityRequirement {
   const target = plannerInput(input);
   const absoluteYaw = target.yaw === null ? null : Math.abs(target.yaw);
-  const needsFullBody = target.coverage === "full_body";
+  const needsFullBody = target.coverage === "three_quarter" || target.coverage === "full_body";
+  const needsBodyContext = target.coverage !== "face";
   const turnedBack = target.orientation === "back_three_quarter" || target.orientation === "back";
   const lowVisibility = target.visibility !== null && target.visibility < 0.55;
-  const advanced = (target.shotType === "motion" && (absoluteYaw === null || absoluteYaw >= 50 || needsFullBody || turnedBack)) || lowVisibility;
-  const simple = target.mediaType === "image" && target.hasFaceCv && target.hasHeadPoseCv && !target.hasMock && absoluteYaw !== null && absoluteYaw < 20 && !needsFullBody && target.orientation === "front" && target.visibility !== null && target.visibility >= 0.8;
+  const advanced = needsBodyContext || (target.shotType === "motion" && (absoluteYaw === null || absoluteYaw >= 50 || needsFullBody || turnedBack)) || lowVisibility;
+  const simple = target.coverage === "face" && target.mediaType === "image" && target.hasFaceCv && target.hasHeadPoseCv && !target.hasMock && absoluteYaw !== null && absoluteYaw < 20 && !needsFullBody && target.orientation === "front" && target.visibility !== null && target.visibility >= 0.8;
   if (simple) return {
     mode: "simple", reason: `MediaPipe 检测到清晰正脸（偏转约 ${Math.round(absoluteYaw)}°），一张自拍就够了。`,
     basis: "cv", basisSummary: "依据 MediaPipe 人脸框、头部姿态与可见度规划",
@@ -55,10 +56,10 @@ export function planIdentityRequirement(input: ReferenceAnalysis | TargetShot): 
     ? "依据 MediaPipe 几何检测与 VLM 场景语义规划"
     : basis === "vlm" ? "几何数据不足，依据 VLM 姿态语义保守规划" : "真实分析不完整，采用安全降级规划";
   if (advanced) return {
-    mode: "advanced", reason: lowVisibility ? "人物面部可见度较低，需要更多角度来补足身份信息。" : "镜头包含回头或较大动作变化，需要多角度信息来保持自然。",
+    mode: "advanced", reason: needsBodyContext ? "完整人物替换需要同时采集头发、肩颈和身体比例。" : lowVisibility ? "人物面部可见度较低，需要更多角度来补足身份信息。" : "镜头包含回头或较大动作变化，需要多角度信息来保持自然。",
     basis, basisSummary,
     faceViews: ["front", turnsRight ? "right_45" : "left_45", turnsRight ? "right_profile" : "left_profile"], needsFullBody,
-    captureDurationSeconds: 9, bestFrameCount: 3, materials: ["8–10 秒多角度头部采集", ...(needsFullBody ? ["1 张全身参考"] : [])],
+    captureDurationSeconds: 9, bestFrameCount: 3, materials: ["8–10 秒多角度头部与肩颈采集", ...(needsFullBody ? ["1 张包含体型和身体比例的全身参考"] : [])],
   };
   return {
     mode: "standard",
@@ -82,3 +83,4 @@ export function buildCaptureInstructions(requirement: IdentityRequirement): Capt
   );
   return instructions;
 }
+
