@@ -18,6 +18,8 @@ function validateInput(value: unknown): GenerationRequest {
   if (!Array.isArray(input.identityFrames) || input.identityFrames.length < 1) throw new Error("至少需要一张身份关键帧");
   if (input.identityFrames.length > 3) throw new Error("为保持原图构图，身份关键帧最多 3 张");
   validateImage(input.referenceImage, "参考图");
+  if (!input.personEditMask?.region) throw new Error("缺少人物编辑蒙版");
+  validateImage(input.personEditMask.image, "人物编辑蒙版");
   input.identityFrames.forEach((frame, index) => validateImage(frame?.image, `身份关键帧 ${index + 1}`));
   if (input.fullBodyImage) validateImage(input.fullBodyImage, "全身参考");
   if (!input.referenceAnalysis || !input.targetShot) throw new Error("缺少镜头分析结果");
@@ -26,10 +28,10 @@ function validateInput(value: unknown): GenerationRequest {
   if (["three_quarter", "full_body"].includes(input.referenceAnalysis.shot.body.coverage) && !input.fullBodyImage) throw new Error("中远景或全身镜头需要用户全身参考");
   return input as GenerationRequest;
 }
-function personBoundingBox(input: GenerationRequest) {
-  const person = input.referenceAnalysis.geometry.personBoundingBox || input.referenceAnalysis.scene.subjectRegion;
+function normalizedPersonRegion(input: GenerationRequest) {
+  const person = input.personEditMask.region || input.referenceAnalysis.geometry.personBoundingBox || input.referenceAnalysis.scene.subjectRegion;
   const face = input.referenceAnalysis.geometry.faceBoundingBox;
-  if (!person && !face) return undefined;
+  if (!person && !face) return { x: .2, y: .05, width: .6, height: .9 };
   const hairRegion = face ? {
     x: face.x - face.width * .8,
     y: face.y - face.height * 1.25,
@@ -45,11 +47,18 @@ function personBoundingBox(input: GenerationRequest) {
   const paddingX = Math.max(width * .1, face?.width ? face.width * .35 : 0);
   const paddingTop = Math.max(height * .05, face?.height ? face.height * .35 : 0);
   const paddingBottom = height * .08;
-  const x1 = Math.max(0, Math.floor((left - paddingX) * input.referenceSize.width));
-  const y1 = Math.max(0, Math.floor((top - paddingTop) * input.referenceSize.height));
-  const x2 = Math.min(input.referenceSize.width, Math.ceil((right + paddingX) * input.referenceSize.width));
-  const y2 = Math.min(input.referenceSize.height, Math.ceil((bottom + paddingBottom) * input.referenceSize.height));
-  return x2 > x1 && y2 > y1 ? [x1, y1, x2, y2] : undefined;
+  return { x: Math.max(0, left - paddingX), y: Math.max(0, top - paddingTop), width: Math.min(1, right + paddingX) - Math.max(0, left - paddingX), height: Math.min(1, bottom + paddingBottom) - Math.max(0, top - paddingTop) };
+}
+function regionBox(region: ReturnType<typeof normalizedPersonRegion>, width: number, height: number) {
+  const x1 = Math.max(0, Math.floor(region.x * width)); const y1 = Math.max(0, Math.floor(region.y * height));
+  const x2 = Math.min(width, Math.ceil((region.x + region.width) * width)); const y2 = Math.min(height, Math.ceil((region.y + region.height) * height));
+  return [x1, y1, x2, y2];
+}
+function outputSize(input: GenerationRequest) {
+  const maximumSide = 2048; const scale = Math.min(1, maximumSide / Math.max(input.referenceSize.width, input.referenceSize.height));
+  const width = Math.max(240, Math.round(input.referenceSize.width * scale / 16) * 16);
+  const height = Math.max(240, Math.round(input.referenceSize.height * scale / 16) * 16);
+  return { width, height, value: `${width}*${height}` };
 }
 function generationPrompt(input: GenerationRequest) {
   const analysis = input.referenceAnalysis;
@@ -71,8 +80,27 @@ function generationPrompt(input: GenerationRequest) {
     input.fullBodyImage ? "最后一张是目标人物全身参考。使用其真实体型、肩宽、身体比例和整体轮廓，同时复刻图1服装的款式、颜色与穿着关系。" : "根据头肩参考自然重建目标人物的肩颈与身体，不得沿用图1原人物的头发、肤色、体型或身体特征。",
     "重点保证头发与脸部属于同一目标人物，发际线自然，耳朵和脸颈肤色连续，头部光线与场景一致，严禁仅换脸或把目标人物的脸贴到图1原人物身体上。",
     "完整清除图1原人物的全部头发、发色、发型轮廓、头顶碎发、鬓角、耳后发丝、肩部发梢和背部长发，不得出现双重发型、重影、残留发丝或两种发色。使用身份参考中目标人物的头发重新生成整个头部轮廓，并让发丝边缘与背景自然融合。",
+    "环境融合为第二优先级：新人物必须继承图1的主光方向、光比、曝光、白平衡、色温、环境色反射、逆光轮廓和阴影软硬度。保持与背景相同的景深、焦点、锐度、运动模糊、噪点、颗粒和镜头质感。",
+    "重建人物与地面、座椅、墙面或道具之间的接触阴影与遮挡关系。头发和衣服边缘必须吸收周围环境色并接受背景透光，禁止硬边抠图、棚拍布光、过度磨皮、HDR、高对比人像或独立头像质感。",
     "输出构图与图1的匹配优先于身份细节、表情细节和美化效果。如果无法同时满足，宁可降低身份精修程度，也不得改变图1构图。",
     `场景还原强度约 ${Math.max(95, Math.min(100, input.intensity))}%。`, "保持自然人体结构、真实皮肤纹理和摄影质感；不要拼贴，不要多余人物，不要文字或水印。只输出一张最终照片。"].filter(Boolean).join("\n").slice(0, 5000);
+}
+function refinementPrompt() {
+  return ["只在框选人物区域内进行环境融合精修，不改变人物身份、脸型、五官、发型、身体比例、姿态、表情、服装、构图或背景内容。",
+    "让人物与周围环境共享完全一致的曝光、白平衡、色温、主光方向、光比、阴影软硬度和环境反射色。",
+    "匹配背景的景深、焦点、锐度、运动模糊、噪点、颗粒、压缩质感和镜头特征。修复头发、耳朵、肩膀、衣服与背景交界处的硬边、光晕和抠图感。",
+    "补充人物与地面、座椅、墙面、道具之间合理的接触阴影、遮挡和反射。禁止重新生成背景，禁止改变脸部，禁止美颜、棚拍光、HDR或海报化。只输出融合后的原构图照片。"].join("\n");
+}
+async function callWan(apiKey: string, model: string, images: string[], prompt: string, size: string, targetBox: number[][], timeoutMs: number) {
+  const startedAt = Date.now();
+  const response = await fetch(`${dashscopeBaseUrl()}/services/aigc/multimodal-generation/generation`, { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model, input: { messages: [{ role: "user", content: [...images.map((image) => ({ image })), { text: prompt }] }] }, parameters: { size, n: 1, watermark: false, thinking_mode: true, bbox_list: [targetBox, ...images.slice(1).map(() => [])] } }), signal: AbortSignal.timeout(timeoutMs) });
+  const text = await response.text(); let payload: any;
+  try { payload = JSON.parse(text); } catch { throw new Error(`DashScope 返回非 JSON 响应（HTTP ${response.status}）`); }
+  if (!response.ok) throw new Error(payload.message || payload.code || "Wan2.7 图片编辑失败");
+  const imageUrl = (payload.output?.choices?.[0]?.message?.content || []).find((item: { image?: string }) => item.image)?.image;
+  if (!imageUrl) throw new Error("Wan2.7 未返回生成图片");
+  return { imageUrl, requestId: payload.request_id as string | undefined, elapsedMs: Date.now() - startedAt };
 }
 async function generateWithWan(input: GenerationRequest) {
   const apiKey = process.env.DASHSCOPE_IMAGE_API_KEY || process.env.DASHSCOPE_API_KEY;
@@ -80,17 +108,16 @@ async function generateWithWan(input: GenerationRequest) {
   const model = process.env.DASHSCOPE_IMAGE_MODEL || "wan2.7-image";
   const images = [input.referenceImage, ...input.identityFrames.map((frame) => frame.image), ...(input.fullBodyImage ? [input.fullBodyImage] : [])];
   if (images.length > 9) throw new Error("Wan2.7 最多接受 9 张参考图片");
-  const startedAt = Date.now();
-  const targetBox = personBoundingBox(input);
-  const parameters = { size: process.env.DASHSCOPE_IMAGE_SIZE || "2K", n: 1, watermark: false, thinking_mode: true, ...(targetBox ? { bbox_list: [[targetBox], ...images.slice(1).map(() => [])] } : {}) };
-  const response = await fetch(`${dashscopeBaseUrl()}/services/aigc/multimodal-generation/generation`, { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, input: { messages: [{ role: "user", content: [...images.map((image) => ({ image })), { text: generationPrompt(input) }] }] }, parameters }), signal: AbortSignal.timeout(240_000) });
-  const text = await response.text(); let payload: any;
-  try { payload = JSON.parse(text); } catch { throw new Error(`DashScope 返回非 JSON 响应（HTTP ${response.status}）`); }
-  if (!response.ok) throw new Error(payload.message || payload.code || "Wan2.7 图片生成失败");
-  const imageUrl = (payload.output?.choices?.[0]?.message?.content || []).find((item: { image?: string }) => item.image)?.image;
-  if (!imageUrl) throw new Error("Wan2.7 未返回生成图片");
-  return { id: payload.request_id || `dashscope-${Date.now()}`, imageUrl, provider: "dashscope" as const, model, elapsedMs: Date.now() - startedAt, requestId: payload.request_id };
+  const startedAt = Date.now(); const size = outputSize(input); const region = normalizedPersonRegion(input);
+  const replacement = await callWan(apiKey, model, images, generationPrompt(input), size.value, [regionBox(region, input.referenceSize.width, input.referenceSize.height)], 210_000);
+  const refinementEnabled = process.env.DASHSCOPE_ENABLE_REFINEMENT !== "false";
+  const refinementBudget = 285_000 - (Date.now() - startedAt);
+  const refinement = refinementEnabled && refinementBudget >= 30_000
+    ? await callWan(apiKey, model, [replacement.imageUrl], refinementPrompt(), size.value, [regionBox(region, size.width, size.height)], refinementBudget)
+    : undefined;
+  return { id: replacement.requestId || `dashscope-${Date.now()}`, imageUrl: refinement?.imageUrl || replacement.imageUrl, provider: "dashscope" as const, model,
+    elapsedMs: Date.now() - startedAt, requestId: replacement.requestId, refinementRequestId: refinement?.requestId,
+    stages: [{ name: "person-replacement" as const, elapsedMs: replacement.elapsedMs }, ...(refinement ? [{ name: "environment-refinement" as const, elapsedMs: refinement.elapsedMs }] : [])] };
 }
 export async function POST(request: Request) {
   try {

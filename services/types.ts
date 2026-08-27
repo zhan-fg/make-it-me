@@ -161,6 +161,7 @@ export type GenerationRequest = {
   clothingStrategy: "reference_outfit";
   referenceImage: string;
   referenceSize: { width: number; height: number };
+  personEditMask: { image: string; source: "mediapipe-pose-envelope" | "geometry-envelope"; region: NormalizedBoundingBox };
   identityFrames: Array<{ image: string; view: string; qualityScore: number }>;
   fullBodyImage?: string;
   referenceAnalysis: ReferenceAnalysis;
@@ -175,7 +176,7 @@ export type GenerationRequest = {
   };
 };
 
-export type GenerationResult = { id: string; imageUrl: string; provider: "dashscope"; model: string; elapsedMs: number; requestId?: string };
+export type GenerationResult = { id: string; imageUrl: string; provider: "dashscope"; model: string; elapsedMs: number; requestId?: string; refinementRequestId?: string; stages?: Array<{ name: "person-replacement" | "environment-refinement"; elapsedMs: number }> };
 
 export interface GeometryAnalyzerAdapter {
   detectCapabilities(): { imageDimensions: boolean; faceDetector: boolean; bodyKeypoints: boolean; headPose: boolean; personSegmentation: boolean; depth: boolean; occlusion: boolean };

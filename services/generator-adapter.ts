@@ -30,6 +30,29 @@ async function normalizeImage(source: string, mediaType: "image" | "video" = "im
   return { image: canvas.toDataURL("image/jpeg", 0.9), width: canvas.width, height: canvas.height };
 }
 
+function personRegion(analysis: ReferenceAnalysis): NormalizedBoundingBox {
+  const person = analysis.geometry.personBoundingBox || analysis.scene.subjectRegion;
+  const face = analysis.geometry.faceBoundingBox;
+  if (person) return person;
+  if (face) return {
+    x: Math.max(0, face.x - face.width * .9), y: Math.max(0, face.y - face.height * 1.2),
+    width: Math.min(1, face.width * 2.8), height: Math.min(1, face.height * 4.5),
+  };
+  return { x: .2, y: .05, width: .6, height: .9 };
+}
+
+function createPersonEditMask(width: number, height: number, region: NormalizedBoundingBox, source: "mediapipe-pose-envelope" | "geometry-envelope") {
+  const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("无法创建人物编辑蒙版");
+  context.fillStyle = "black"; context.fillRect(0, 0, width, height);
+  const paddingX = region.width * width * .08; const paddingY = region.height * height * .05;
+  const x = Math.max(0, region.x * width - paddingX); const y = Math.max(0, region.y * height - paddingY);
+  const boxWidth = Math.min(width - x, region.width * width + paddingX * 2); const boxHeight = Math.min(height - y, region.height * height + paddingY * 2);
+  context.fillStyle = "white"; context.beginPath(); context.roundRect(x, y, boxWidth, boxHeight, Math.min(boxWidth, boxHeight) * .18); context.fill();
+  return { image: canvas.toDataURL("image/png"), source, region };
+}
+
 function bestIdentityFrames(capture: CaptureResult) {
   const ranked = [...capture.selectedFrames].sort((left, right) => right.quality.score - left.quality.score);
   const front = ranked.find((frame) => frame.instructionId === "front");
@@ -45,11 +68,14 @@ export const generatorAdapter = {
     if (!reference) throw new Error("缺少参考素材，无法开始真实生成");
     const frames = bestIdentityFrames(capture);
     const [referenceMedia, ...identityMedia] = await Promise.all([normalizeImage(reference, referenceAnalysis.reference.mediaType), ...frames.map((frame) => normalizeImage(frame.dataUrl, "image", frame.faceBox))]);
+    const region = personRegion(referenceAnalysis);
+    const maskSource = referenceAnalysis.geometry.bodyKeypointsAvailable ? "mediapipe-pose-envelope" as const : "geometry-envelope" as const;
     const request: GenerationRequest = {
       replacementMode: "full_person",
       clothingStrategy: "reference_outfit",
       referenceImage: referenceMedia.image,
       referenceSize: { width: referenceMedia.width, height: referenceMedia.height },
+      personEditMask: createPersonEditMask(referenceMedia.width, referenceMedia.height, region, maskSource),
       identityFrames: frames.map((frame, index) => ({ image: identityMedia[index].image, view: frame.instructionId, qualityScore: frame.quality.score })),
       fullBodyImage: capture.fullBodyImage ? (await normalizeImage(capture.fullBodyImage)).image : undefined,
       referenceAnalysis, targetShot, preserveScene: referenceAnalysis.scene.preserveRecommended, intensity: 85,
