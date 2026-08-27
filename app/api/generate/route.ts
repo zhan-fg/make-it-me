@@ -16,7 +16,7 @@ function validateInput(value: unknown): GenerationRequest {
   const input = value as Partial<GenerationRequest>;
   if (input.replacementMode !== "full_person") throw new Error("当前版本仅支持完整人物替换");
   if (!Array.isArray(input.identityFrames) || input.identityFrames.length < 1) throw new Error("至少需要一张身份关键帧");
-  if (input.identityFrames.length > 7) throw new Error("身份关键帧最多 7 张");
+  if (input.identityFrames.length > 3) throw new Error("为保持原图构图，身份关键帧最多 3 张");
   validateImage(input.referenceImage, "参考图");
   input.identityFrames.forEach((frame, index) => validateImage(frame?.image, `身份关键帧 ${index + 1}`));
   if (input.fullBodyImage) validateImage(input.fullBodyImage, "全身参考");
@@ -53,17 +53,26 @@ function personBoundingBox(input: GenerationRequest) {
 }
 function generationPrompt(input: GenerationRequest) {
   const analysis = input.referenceAnalysis;
+  const subject = analysis.geometry.personBoundingBox || analysis.scene.subjectRegion;
+  const compositionLock = subject
+    ? `图1人物区域约为画面左侧 ${Math.round(subject.x * 100)}%、顶部 ${Math.round(subject.y * 100)}%、宽度 ${Math.round(subject.width * 100)}%、高度 ${Math.round(subject.height * 100)}%。新人物必须占据同一区域，中心点、头顶、脚底和身体外轮廓不得明显移动。`
+    : "新人物必须严格覆盖图1原人物的位置与外轮廓，保持相同人物中心点、画面占比和头身比例。";
   const expressionRule = input.expressionPolicy.mouthState === "teeth_visible" && input.expressionPolicy.hasMatchingExpressionFrame
     ? "可以参考专门采集的露齿表情帧生成自然、克制的露齿微笑；保持目标人物真实唇形、牙齿比例和嘴角幅度，不要夸张笑容。"
     : "不要生成或露出牙齿。只保留参考图的整体情绪语气，使用自然闭嘴或极轻微微笑；不得强行复刻原人物的嘴型、牙齿、嘴角幅度或面部肌肉。";
-  return ["执行完整人物替换，生成一张高品质、写实、自然的仿拍照片。", "图1是镜头和环境参考。保留框外背景、光线、机位、构图、景别，以及框内人物的姿态、视线、表情和互动关系；彻底移除图1原人物的身份与身体外观。",
+  return ["任务是对图1进行局部人物替换，不是重新创作场景，也不是多图拼接。图1是唯一的构图底图，输出必须保持图1的完整画布、宽高比和像素方向。",
+    "构图锁定为最高优先级：禁止裁切、扩图、缩放、重新取景、改变镜头焦段、改变相机距离、移动人物、放大头部、虚化或重绘背景。背景、前景、地平线、建筑、家具、道具及其位置必须与图1一致。",
+    compositionLock,
+    "图2及之后的图片只能提供目标人物身份、头发、肤色和身体特征，绝不能提供背景、构图、人物尺寸、相机角度或画面风格。严禁把身份图中的头像直接粘贴到图1，严禁生成头像海报、证件照、大头照或氛围背景人像。",
+    "执行完整人物替换，生成一张高品质、写实、自然的仿拍照片。彻底移除图1原人物的身份与身体外观，但保留其原始姿态、身体透视、遮挡关系、人物占比、服装关系和与环境的接触点。",
     `场景：${analysis.scene.summary}。光线：${analysis.scene.lightingContext || "沿用参考图"}。`, `构图：${analysis.shot.composition}；机位：${analysis.shot.cameraAngle}；景别：${analysis.shot.framing}。`,
     `姿态：${analysis.shot.body.poseSummary}；视线：${input.expressionPolicy.targetGaze}；参考情绪：${input.expressionPolicy.targetExpression}。${expressionRule}`,
     `图2开始是同一目标人物的头肩身份参考，角度依次为：${input.identityFrames.map((frame) => frame.view).join("、")}。使用目标人物的完整头部身份：脸型、五官比例、眼睛、鼻子、嘴、耳朵、发际线、发型、发色、颈部与肤色。`,
     input.fullBodyImage ? "最后一张是目标人物全身参考。使用其真实体型、肩宽、身体比例和整体轮廓，同时复刻图1服装的款式、颜色与穿着关系。" : "根据头肩参考自然重建目标人物的肩颈与身体，不得沿用图1原人物的头发、肤色、体型或身体特征。",
     "重点保证头发与脸部属于同一目标人物，发际线自然，耳朵和脸颈肤色连续，头部光线与场景一致，严禁仅换脸或把目标人物的脸贴到图1原人物身体上。",
     "完整清除图1原人物的全部头发、发色、发型轮廓、头顶碎发、鬓角、耳后发丝、肩部发梢和背部长发，不得出现双重发型、重影、残留发丝或两种发色。使用身份参考中目标人物的头发重新生成整个头部轮廓，并让发丝边缘与背景自然融合。",
-    `场景还原强度约 ${Math.max(0, Math.min(100, input.intensity))}%。`, "保持自然人体结构、真实皮肤纹理和摄影质感；不要拼贴，不要多余人物，不要文字或水印。只输出一张最终照片。"].filter(Boolean).join("\n").slice(0, 5000);
+    "输出构图与图1的匹配优先于身份细节、表情细节和美化效果。如果无法同时满足，宁可降低身份精修程度，也不得改变图1构图。",
+    `场景还原强度约 ${Math.max(95, Math.min(100, input.intensity))}%。`, "保持自然人体结构、真实皮肤纹理和摄影质感；不要拼贴，不要多余人物，不要文字或水印。只输出一张最终照片。"].filter(Boolean).join("\n").slice(0, 5000);
 }
 async function generateWithWan(input: GenerationRequest) {
   const apiKey = process.env.DASHSCOPE_IMAGE_API_KEY || process.env.DASHSCOPE_API_KEY;

@@ -34,7 +34,10 @@ function bestIdentityFrames(capture: CaptureResult) {
   const ranked = [...capture.selectedFrames].sort((left, right) => right.quality.score - left.quality.score);
   const front = ranked.find((frame) => frame.instructionId === "front");
   const expression = ranked.find((frame) => frame.instructionId === "expression");
-  return [front, expression, ...ranked.filter((frame) => frame !== front && frame !== expression)].filter((frame): frame is NonNullable<typeof frame> => Boolean(frame)).slice(0, 4);
+  const angle = ranked.find((frame) => !["front", "expression", "hold", "distance"].includes(frame.instructionId));
+  return [front, angle, expression, ...ranked.filter((frame) => frame !== front && frame !== angle && frame !== expression)]
+    .filter((frame): frame is NonNullable<typeof frame> => Boolean(frame))
+    .slice(0, 3);
 }
 
 export const generatorAdapter = {
