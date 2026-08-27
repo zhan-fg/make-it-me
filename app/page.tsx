@@ -7,9 +7,9 @@ import { generatorAdapter } from "@/services/generator-adapter";
 import { naturalBeautySettings, retouchFrame } from "@/services/beauty-retouch";
 import { deriveTargetShot, referenceAnalyzer } from "@/services/reference-analyzer";
 import { planIdentityRequirement } from "@/services/requirement-planner";
-import type { BeautySettings, CaptureResult, EphemeralIdentitySession, GenerationResult, IdentityRequirement, ReferenceAnalysis, TargetShot } from "@/services/types";
+import type { BeautySettings, CaptureResult, CharacterProfile, EphemeralIdentitySession, GenerationResult, IdentityRequirement, PhotoScenario, ReferenceAnalysis, TargetShot, TransferStrength } from "@/services/types";
 
-type View = "discover" | "analyzing" | "requirements" | "capture" | "review" | "generating" | "result" | "appearance";
+type View = "discover" | "analyzing" | "requirements" | "capture" | "review" | "styling" | "generating" | "result" | "appearance";
 type Reference = { id: string; title: string; detail: string; mediaType: "image" | "video"; source?: string; colors: string };
 
 const templates: Reference[] = [
@@ -23,6 +23,21 @@ const templates: Reference[] = [
 const modeNames = { simple: "Simple", standard: "Standard", advanced: "Advanced" };
 const modeLabels = { simple: "轻量采集", standard: "引导采集", advanced: "多角度采集" };
 
+function initialCharacter(analysis: ReferenceAnalysis): CharacterProfile {
+  return {
+    makeup: { description: analysis.appearance.makeup || "自然清透妆容", strength: "inspired" },
+    hair: { description: analysis.appearance.hair || "自然发型", strength: "inspired" },
+    outfit: { description: analysis.appearance.outfit || "参考照片服装", strength: "match_reference" },
+    accessories: { description: analysis.appearance.accessories || "无明显配饰", strength: "inspired" },
+    expression: analysis.shot.face.expression || "自然放松",
+    pose: analysis.shot.body.poseSummary || "沿用参考姿势",
+  };
+}
+
+function initialScenario(analysis: ReferenceAnalysis): PhotoScenario {
+  return { mode: "reference", scene: analysis.scene.summary, lighting: analysis.scene.lightingContext || "沿用参考光线", camera: analysis.shot.cameraAngle, composition: analysis.shot.composition };
+}
+
 export default function Home() {
   const [view, setView] = useState<View>("discover");
   const [reference, setReference] = useState<Reference>();
@@ -34,6 +49,8 @@ export default function Home() {
   const [resultImage, setResultImage] = useState<string>();
   const [generationResult, setGenerationResult] = useState<GenerationResult>();
   const [generationError, setGenerationError] = useState<string>();
+  const [characterProfile, setCharacterProfile] = useState<CharacterProfile>();
+  const [photoScenario, setPhotoScenario] = useState<PhotoScenario>();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const analyzeReference = async (nextReference: Reference) => {
@@ -42,6 +59,7 @@ export default function Home() {
     const shot = deriveTargetShot(analysis);
     const planned = planIdentityRequirement(analysis);
     setReferenceAnalysis(analysis);
+    setCharacterProfile(initialCharacter(analysis)); setPhotoScenario(initialScenario(analysis));
     setTargetShot(shot); setRequirement(planned);
     setSession({ id: `ephemeral-${Date.now()}`, createdAt: Date.now(), referenceAnalysis: analysis, targetShot: shot, requirement: planned, scope: "session" });
     setView("requirements");
@@ -59,16 +77,16 @@ export default function Home() {
   };
 
   const generate = async () => {
-    if (!capture || !targetShot || !referenceAnalysis) return;
+    if (!capture || !targetShot || !referenceAnalysis || !characterProfile || !photoScenario) return;
     setGenerationError(undefined); setView("generating");
     try {
-      const generated = await generatorAdapter.generate(reference?.source, capture, targetShot, referenceAnalysis);
+      const generated = await generatorAdapter.generate(reference?.source, capture, targetShot, referenceAnalysis, characterProfile, photoScenario);
       setGenerationResult(generated); setResultImage(generated.imageUrl); setView("result");
     } catch (error) { const message = error instanceof Error ? error.message : "图片生成失败"; setGenerationError(message); setView("review"); }
   };
 
   const reset = () => {
-    setReference(undefined); setReferenceAnalysis(undefined); setTargetShot(undefined); setRequirement(undefined); setSession(undefined); setCapture(undefined); setResultImage(undefined); setGenerationResult(undefined); setGenerationError(undefined); setView("discover");
+    setReference(undefined); setReferenceAnalysis(undefined); setTargetShot(undefined); setRequirement(undefined); setSession(undefined); setCapture(undefined); setResultImage(undefined); setGenerationResult(undefined); setGenerationError(undefined); setCharacterProfile(undefined); setPhotoScenario(undefined); setView("discover");
     if (fileInput.current) fileInput.current.value = "";
   };
 
@@ -80,7 +98,8 @@ export default function Home() {
     {view === "requirements" && referenceAnalysis && targetShot && requirement && <Requirements reference={reference} analysis={referenceAnalysis} target={targetShot} requirement={requirement} start={() => setView("capture")} appearance={() => setView("appearance")} />}
     {view === "capture" && requirement && <GuidedCapture requirement={requirement} onComplete={completeCapture} onCancel={() => setView("requirements")} />}
     {view === "review" && generationError && <div role="alert" className="mx-auto mt-4 max-w-4xl rounded-2xl border border-[#f1b5aa] bg-[#fff1ee] p-4 text-sm text-[#8f3328]"><b>真实生成失败</b><p className="mt-1 leading-6">{generationError}</p><p className="mt-2 text-xs text-[#9b5a51]">未使用 Mock 结果。请检查访问码、模型区域或稍后重试。</p></div>}
-    {view === "review" && capture && requirement && <CaptureReview capture={capture} requirement={requirement} updateCapture={(nextCapture) => { setCapture(nextCapture); setSession((current) => current ? { ...current, capture: nextCapture } : current); }} retake={() => setView("capture")} continueFlow={generate} />}
+    {view === "review" && capture && requirement && <CaptureReview capture={capture} requirement={requirement} updateCapture={(nextCapture) => { setCapture(nextCapture); setSession((current) => current ? { ...current, capture: nextCapture } : current); }} retake={() => setView("capture")} continueFlow={() => setView("styling")} />}
+    {view === "styling" && referenceAnalysis && characterProfile && photoScenario && <CharacterConfigurator analysis={referenceAnalysis} character={characterProfile} scenario={photoScenario} updateCharacter={setCharacterProfile} updateScenario={setPhotoScenario} back={() => setView("review")} generate={generate} />}
     {view === "generating" && <Generating reference={reference} />}
     {view === "result" && <Result reference={reference} resultImage={resultImage} generation={generationResult} again={() => { setCapture(undefined); setSession((current) => current ? { ...current, capture: undefined } : current); setView("capture"); }} reset={reset} />}
     {view === "appearance" && <Appearance back={() => setView(reference ? "requirements" : "discover")} />}
@@ -244,6 +263,16 @@ function CaptureReview({ capture, requirement, updateCapture, retake, continueFl
     <section className="mt-4 rounded-[24px] bg-white p-5"><div className="flex flex-wrap gap-2"><button onClick={() => applyBeauty(original)} disabled={applying} className="rounded-full bg-[#f2f2f4] px-4 py-2 text-xs">原相机</button><button onClick={() => applyBeauty(naturalBeautySettings)} disabled={applying} className="rounded-full bg-[#eee8ff] px-4 py-2 text-xs text-[#6547bd]">自然精修</button><button onClick={() => applyBeauty(polished)} disabled={applying} className="rounded-full bg-[#1d1d21] px-4 py-2 text-xs text-white">精致塑形</button></div><div className="mt-5 grid gap-5 sm:grid-cols-2">{control("磨皮", "smoothing", 45)}{control("提亮", "brighten", 15)}{control("瘦脸", "slimFace", 15)}{control("大眼", "enlargeEyes", 8)}</div><button onClick={() => applyBeauty(settings)} disabled={applying} className="mt-5 w-full rounded-2xl bg-[#7655d6] py-3 text-sm font-medium text-white disabled:opacity-50">{applying ? "正在本地精修…" : "应用当前参数"}</button><p className="mt-3 text-[11px] leading-5 text-[#77777e]">瘦脸与大眼设置了身份保护上限；原始画面仍保留在当前页面会话中，可随时恢复。</p></section>
     {capture.fullBodyImage && <div className="mt-4 flex items-center gap-3 rounded-2xl bg-white p-3"><img src={capture.fullBodyImage} alt="全身参考" className="h-16 w-12 rounded-lg object-cover"/><div><b className="text-sm">全身参考已加入</b><p className="mt-1 text-xs text-[#77777e]">只在本次生成中使用</p></div><IconCheck size={18} className="ml-auto text-[#7655d6]"/></div>}
     <details className="mt-4 rounded-2xl bg-white/65 p-4 text-xs"><summary className="cursor-pointer">精修与检测说明</summary><div className="mt-3 grid gap-2 sm:grid-cols-2"><span>皮肤：局部平滑并保留眼睛和嘴唇</span><span>塑形：MediaPipe 关键点局部形变</span><span>质量评分：始终使用原始采集画面</span><span>生成素材：使用当前预览的精修版本</span></div></details><div className="mt-6 flex gap-3"><button onClick={retake} className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-4 text-sm"><IconRefresh size={17}/>重拍</button><button onClick={continueFlow} disabled={applying} className="flex-[2] rounded-2xl bg-[#1d1d21] py-4 text-sm font-semibold text-white disabled:opacity-50">继续生成</button></div><p className="mt-4 text-center text-[11px] text-[#8b8b91]">{modeLabels[requirement.mode]} · 不上传整段视频</p></div></Page>;
+}
+
+function CharacterConfigurator({ analysis, character, scenario, updateCharacter, updateScenario, back, generate }: { analysis: ReferenceAnalysis; character: CharacterProfile; scenario: PhotoScenario; updateCharacter: (value: CharacterProfile) => void; updateScenario: (value: PhotoScenario) => void; back: () => void; generate: () => void }) {
+  const strengthOptions: Array<{ value: TransferStrength; label: string }> = [{ value: "keep_self", label: "保留自己" }, { value: "inspired", label: "轻度借鉴" }, { value: "match_reference", label: "高度复刻" }];
+  const appearanceField = (label: string, key: "makeup" | "hair" | "outfit" | "accessories") => <div className="rounded-2xl bg-[#f5f5f7] p-4"><div className="flex items-center justify-between"><b className="text-sm">{label}</b><span className="text-[10px] text-[#8065cb]">来自参考分析，可编辑</span></div><input value={character[key].description} onChange={(event) => updateCharacter({ ...character, [key]: { ...character[key], description: event.target.value } })} className="mt-3 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm outline-none focus:border-[#7655d6]"/><div className="mt-3 flex flex-wrap gap-2">{strengthOptions.map((option) => <button key={option.value} onClick={() => updateCharacter({ ...character, [key]: { ...character[key], strength: option.value } })} className={`rounded-full px-3 py-2 text-[11px] ${character[key].strength === option.value ? "bg-[#1d1d21] text-white" : "bg-white text-[#66666d]"}`}>{option.label}</button>)}</div></div>;
+  const textField = (label: string, value: string, update: (value: string) => void) => <label className="block"><span className="text-xs font-medium">{label}</span><input value={value} onChange={(event) => update(event.target.value)} className="mt-2 w-full rounded-xl border border-[#e8e8ec] bg-white px-3 py-3 text-sm outline-none focus:border-[#7655d6]"/></label>;
+  return <Page><div className="mx-auto max-w-5xl"><button onClick={back} className="text-sm text-[#707078]">← 返回精修</button><div className="mt-4"><span className="text-xs text-[#7655d6]">生成前最后一步</span><h1 className="mt-2 text-[34px] font-bold">设计你的角色形象</h1><p className="mt-2 text-sm text-[#757575]">保持你本人身份，同时决定想借鉴的妆容、发型、服装、拍照造型和场景。</p></div>
+    <div className="mt-7 grid gap-5 lg:grid-cols-[1.1fr_.9fr]"><section className="rounded-[26px] bg-white p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-[11px] uppercase tracking-[.14em] text-[#8065cb]">CHARACTER</p><h2 className="mt-1 text-xl font-semibold">妆造选择</h2></div><span className="rounded-full bg-[#ecffe1] px-3 py-1.5 text-xs text-[#477329]">身份锁定</span></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{appearanceField("妆容", "makeup")}{appearanceField("发型", "hair")}{appearanceField("服装", "outfit")}{appearanceField("配饰", "accessories")}</div><div className="mt-5 grid gap-4 sm:grid-cols-2">{textField("目标表情", character.expression, (value) => updateCharacter({ ...character, expression: value }))}{textField("拍照姿势", character.pose, (value) => updateCharacter({ ...character, pose: value }))}</div><p className="mt-4 text-[11px] leading-5 text-[#77777e]">“高度复刻”只复刻妆造设计，不复制参考人物的脸型和五官。表情仍受身份保护与采集素材约束。</p></section>
+      <section className="rounded-[26px] bg-white p-5 sm:p-6"><p className="text-[11px] uppercase tracking-[.14em] text-[#8065cb]">SCENARIO</p><h2 className="mt-1 text-xl font-semibold">场景与摄影方案</h2><div className="mt-4 grid grid-cols-2 gap-2"><button onClick={() => updateScenario(initialScenario(analysis))} className={`rounded-2xl px-3 py-3 text-sm ${scenario.mode === "reference" ? "bg-[#1d1d21] text-white" : "bg-[#f5f5f7]"}`}>沿用参考场景</button><button onClick={() => updateScenario({ ...scenario, mode: "custom", scene: "专业摄影棚或自定义场景" })} className={`rounded-2xl px-3 py-3 text-sm ${scenario.mode === "custom" ? "bg-[#7655d6] text-white" : "bg-[#f5f5f7]"}`}>自由选择场景</button></div><div className="mt-5 space-y-4">{textField("场景描述", scenario.scene, (value) => updateScenario({ ...scenario, scene: value }))}{textField("光线氛围", scenario.lighting, (value) => updateScenario({ ...scenario, lighting: value }))}{textField("拍摄角度", scenario.camera, (value) => updateScenario({ ...scenario, camera: value }))}{textField("构图方式", scenario.composition, (value) => updateScenario({ ...scenario, composition: value }))}</div><div className="mt-5 rounded-2xl bg-[#f4efff] p-4 text-xs leading-5 text-[#6f6880]">自由场景仍以参考图作为构图底图生成。当前版本适合改变环境语义与氛围；彻底改变镜头布局将在后续“自由写真”模式提供。</div></section></div>
+    <div className="mt-5 flex gap-3"><button onClick={back} className="flex-1 rounded-2xl bg-white py-4 text-sm">返回调整</button><button onClick={generate} className="flex-[2] rounded-2xl bg-[#1d1d21] py-4 text-sm font-semibold text-white">使用此角色生成照片</button></div></div></Page>;
 }
 
 function Generating({ reference }: { reference?: Reference }) {

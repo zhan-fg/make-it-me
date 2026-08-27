@@ -9,6 +9,22 @@ export type AnalysisSource = "browser-metadata" | "browser-face-detector" | "med
 export type NormalizedBoundingBox = { x: number; y: number; width: number; height: number };
 export type FacePoint = { x: number; y: number };
 export type BeautySettings = { smoothing: number; brighten: number; slimFace: number; enlargeEyes: number };
+export type TransferStrength = "keep_self" | "inspired" | "match_reference";
+export type CharacterProfile = {
+  makeup: { description: string; strength: TransferStrength };
+  hair: { description: string; strength: TransferStrength };
+  outfit: { description: string; strength: TransferStrength };
+  accessories: { description: string; strength: TransferStrength };
+  expression: string;
+  pose: string;
+};
+export type PhotoScenario = {
+  mode: "reference" | "custom";
+  scene: string;
+  lighting: string;
+  camera: string;
+  composition: string;
+};
 export type FieldProvenance = {
   source: AnalysisSource;
   available: boolean;
@@ -163,7 +179,7 @@ export type SemanticAnalysis = {
 
 export type GenerationRequest = {
   replacementMode: "full_person";
-  clothingStrategy: "reference_outfit";
+  clothingStrategy: "reference_outfit" | "character_profile";
   referenceImage: string;
   referenceSize: { width: number; height: number };
   personEditMask: { image: string; source: "mediapipe-pose-envelope" | "geometry-envelope"; region: NormalizedBoundingBox };
@@ -171,6 +187,8 @@ export type GenerationRequest = {
   fullBodyImage?: string;
   referenceAnalysis: ReferenceAnalysis;
   targetShot: TargetShot;
+  characterProfile: CharacterProfile;
+  photoScenario: PhotoScenario;
   preserveScene: boolean;
   intensity: number;
   expressionPolicy: {

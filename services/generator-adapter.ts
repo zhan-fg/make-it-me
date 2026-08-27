@@ -1,4 +1,4 @@
-import type { CaptureResult, GenerationRequest, GenerationResult, NormalizedBoundingBox, ReferenceAnalysis, TargetShot } from "./types";
+import type { CaptureResult, CharacterProfile, GenerationRequest, GenerationResult, NormalizedBoundingBox, PhotoScenario, ReferenceAnalysis, TargetShot } from "./types";
 
 function loadMedia(source: string, mediaType: "image" | "video") {
   return new Promise<HTMLImageElement | HTMLVideoElement>((resolve, reject) => {
@@ -64,7 +64,7 @@ function bestIdentityFrames(capture: CaptureResult) {
 }
 
 export const generatorAdapter = {
-  async generate(reference: string | undefined, capture: CaptureResult, targetShot: TargetShot, referenceAnalysis: ReferenceAnalysis): Promise<GenerationResult> {
+  async generate(reference: string | undefined, capture: CaptureResult, targetShot: TargetShot, referenceAnalysis: ReferenceAnalysis, characterProfile: CharacterProfile, photoScenario: PhotoScenario): Promise<GenerationResult> {
     if (!reference) throw new Error("缺少参考素材，无法开始真实生成");
     const frames = bestIdentityFrames(capture);
     const [referenceMedia, ...identityMedia] = await Promise.all([normalizeImage(reference, referenceAnalysis.reference.mediaType), ...frames.map((frame) => normalizeImage(frame.dataUrl, "image", frame.faceBox))]);
@@ -72,13 +72,13 @@ export const generatorAdapter = {
     const maskSource = referenceAnalysis.geometry.bodyKeypointsAvailable ? "mediapipe-pose-envelope" as const : "geometry-envelope" as const;
     const request: GenerationRequest = {
       replacementMode: "full_person",
-      clothingStrategy: "reference_outfit",
+      clothingStrategy: characterProfile.outfit.strength === "match_reference" ? "reference_outfit" : "character_profile",
       referenceImage: referenceMedia.image,
       referenceSize: { width: referenceMedia.width, height: referenceMedia.height },
       personEditMask: createPersonEditMask(referenceMedia.width, referenceMedia.height, region, maskSource),
       identityFrames: frames.map((frame, index) => ({ image: identityMedia[index].image, view: frame.instructionId, qualityScore: frame.quality.score })),
       fullBodyImage: capture.fullBodyImage ? (await normalizeImage(capture.fullBodyImage)).image : undefined,
-      referenceAnalysis, targetShot, preserveScene: referenceAnalysis.scene.preserveRecommended, intensity: 85,
+      referenceAnalysis, targetShot, characterProfile, photoScenario, preserveScene: photoScenario.mode === "reference", intensity: 85,
       expressionPolicy: {
         targetExpression: referenceAnalysis.shot.face.expression,
         targetGaze: referenceAnalysis.shot.face.gaze,
