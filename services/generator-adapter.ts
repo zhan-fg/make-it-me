@@ -33,7 +33,8 @@ async function normalizeImage(source: string, mediaType: "image" | "video" = "im
 function bestIdentityFrames(capture: CaptureResult) {
   const ranked = [...capture.selectedFrames].sort((left, right) => right.quality.score - left.quality.score);
   const front = ranked.find((frame) => frame.instructionId === "front");
-  return [front, ...ranked.filter((frame) => frame !== front)].filter((frame): frame is NonNullable<typeof frame> => Boolean(frame)).slice(0, 3);
+  const expression = ranked.find((frame) => frame.instructionId === "expression");
+  return [front, expression, ...ranked.filter((frame) => frame !== front && frame !== expression)].filter((frame): frame is NonNullable<typeof frame> => Boolean(frame)).slice(0, 4);
 }
 
 export const generatorAdapter = {
@@ -49,6 +50,12 @@ export const generatorAdapter = {
       identityFrames: frames.map((frame, index) => ({ image: identityMedia[index].image, view: frame.instructionId, qualityScore: frame.quality.score })),
       fullBodyImage: capture.fullBodyImage ? (await normalizeImage(capture.fullBodyImage)).image : undefined,
       referenceAnalysis, targetShot, preserveScene: referenceAnalysis.scene.preserveRecommended, intensity: 85,
+      expressionPolicy: {
+        targetExpression: referenceAnalysis.shot.face.expression,
+        targetGaze: referenceAnalysis.shot.face.gaze,
+        mouthState: referenceAnalysis.shot.face.expression.match(/露齿|牙齿|toothy|teeth/i) ? "teeth_visible" : referenceAnalysis.shot.face.expression.match(/张嘴|微张|open mouth|mouth open/i) ? "slightly_open" : "closed",
+        hasMatchingExpressionFrame: frames.some((frame) => frame.instructionId === "expression" && frame.requestedMouthState === "teeth_visible"),
+      },
     };
     const accessCode = window.sessionStorage.getItem("make-it-me-access-code") || "";
     const response = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json", "x-app-access-code": accessCode }, body: JSON.stringify(request) });

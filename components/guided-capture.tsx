@@ -71,7 +71,7 @@ export function GuidedCapture({ requirement, onComplete, onCancel }: Props) {
     return () => { active = false; cancelAnimationFrame(frameId); };
   }, [cameraState, visionState]);
 
-  const grabFrame = async (instructionId: string) => {
+  const grabFrame = async (instructionId: string, requestedMouthState?: CaptureFrame["requestedMouthState"]) => {
     const video = videoRef.current; const canvas = canvasRef.current;
     if (!video || !canvas || !video.videoWidth) return undefined;
     canvas.width = video.videoWidth; canvas.height = video.videoHeight;
@@ -82,7 +82,8 @@ export function GuidedCapture({ requirement, onComplete, onCancel }: Props) {
     if (detector) {
       try { boxes = (await detector.detect(video)).map((face) => face.boundingBox); } catch { boxes = undefined; }
     }
-    return evaluateFrame(canvas, instructionId, boxes, detectionRef.current);
+    const frame = await evaluateFrame(canvas, instructionId, boxes, detectionRef.current);
+    return { ...frame, requestedMouthState };
   };
 
   const waitForTarget = async (instructionId: string, timeoutMs: number) => {
@@ -104,11 +105,11 @@ export function GuidedCapture({ requirement, onComplete, onCancel }: Props) {
     for (let index = 0; index < instructions.length; index += 1) {
       setInstructionIndex(index);
       await waitForTarget(instructions[index].id, Math.max(3500, instructions[index].holdMs));
-      const first = await grabFrame(instructions[index].id);
+      const first = await grabFrame(instructions[index].id, instructions[index].mouthState);
       if (first) candidates.push(first);
       if (requirement.mode !== "simple") {
         await wait(220);
-        const second = await grabFrame(instructions[index].id);
+        const second = await grabFrame(instructions[index].id, instructions[index].mouthState);
         if (second) candidates.push(second);
       }
       setFrames([...candidates]);
@@ -147,7 +148,7 @@ export function GuidedCapture({ requirement, onComplete, onCancel }: Props) {
         {cameraState === "ready" && <>
           <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/65 to-transparent px-5 pb-20 pt-5"><div className="flex items-center justify-between"><p className="text-xs text-white/65">{requirement.mode === "simple" ? "自拍采集" : `${requirement.captureDurationSeconds} 秒引导采集`}</p><span className={`rounded-full px-2 py-1 text-[10px] ${visionState === "ready" ? "bg-[#d8ff70] text-black" : "bg-white/15 text-white/70"}`}>{visionState === "loading" ? "视觉模型加载中" : visionState === "ready" ? "MediaPipe 实时检测" : "基础检测模式"}</span></div><div className="mt-3 h-1 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-[#d8ff70] transition-all duration-500" style={{ width: `${running ? ((instructionIndex + 1) / instructions.length) * 100 : 0}%` }}/></div></div>
           <div className="pointer-events-none absolute left-1/2 top-[46%] h-[280px] w-[220px] -translate-x-1/2 -translate-y-1/2 rounded-[48%] border-2 border-white/75 shadow-[0_0_0_999px_rgba(0,0,0,.18)]"><span className="absolute -bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-white/65">让脸保持在轮廓内</span></div>
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-6 pb-7 pt-28 text-center"><div className="mx-auto mb-4 flex w-fit gap-1.5">{instructions.map((item, index) => <span key={item.id} className={`h-1.5 rounded-full transition-all ${index === instructionIndex && running ? "w-6 bg-[#d8ff70]" : index < instructionIndex && running ? "w-1.5 bg-[#d8ff70]" : "w-1.5 bg-white/35"}`}/>)}</div><h2 className="text-[26px] font-semibold">{running ? instruction.label : "准备好了吗？"}</h2><p className="mt-1.5 text-sm text-white/65">{running ? liveDetection?.faceCount === 0 ? "没有检测到人脸，请回到取景框内" : liveDetection && liveDetection.faceCount > 1 ? "请确保只有一人入镜" : liveDetection?.yaw !== undefined ? `${instruction.hint} · 当前 ${Math.round(liveDetection.yaw)}°` : instruction.hint : "跟随提示慢慢转头，姿态稳定后会自动抓拍"}</p><button onClick={runCapture} disabled={running || visionState === "loading"} className="mt-5 inline-flex min-w-[180px] items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-semibold text-black disabled:bg-white/20 disabled:text-white"><IconCamera size={18}/>{visionState === "loading" ? "正在准备检测" : running ? `已捕捉 ${frames.length} 帧` : requirement.mode === "simple" ? "拍一张" : "开始采集"}</button></div>
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-6 pb-7 pt-28 text-center"><div className="mx-auto mb-4 flex w-fit gap-1.5">{instructions.map((item, index) => <span key={item.id} className={`h-1.5 rounded-full transition-all ${index === instructionIndex && running ? "w-6 bg-[#d8ff70]" : index < instructionIndex && running ? "w-1.5 bg-[#d8ff70]" : "w-1.5 bg-white/35"}`}/>)}</div><h2 className="text-[26px] font-semibold">{running ? instruction.label : "准备好了吗？"}</h2><p className="mt-1.5 text-sm text-white/65">{running ? liveDetection?.faceCount === 0 ? "没有检测到人脸，请回到取景框内" : liveDetection && liveDetection.faceCount > 1 ? "请确保只有一人入镜" : liveDetection?.yaw !== undefined ? `${instruction.hint} · 当前 ${Math.round(liveDetection.yaw)}°` : instruction.hint : `按提示完成角度、视线和表情采集；${requirement.expressionGuidance}`}</p><button onClick={runCapture} disabled={running || visionState === "loading"} className="mt-5 inline-flex min-w-[180px] items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-semibold text-black disabled:bg-white/20 disabled:text-white"><IconCamera size={18}/>{visionState === "loading" ? "正在准备检测" : running ? `已捕捉 ${frames.length} 帧` : requirement.mode === "simple" ? "开始拍摄" : "开始采集"}</button></div>
         </>}
       </section>
       <aside className="space-y-4">
@@ -159,3 +160,4 @@ export function GuidedCapture({ requirement, onComplete, onCancel }: Props) {
     </div>
   </div>;
 }
+

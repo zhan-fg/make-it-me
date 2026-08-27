@@ -3,6 +3,7 @@ export type MediaType = "image" | "video";
 export type ShotType = "close_up" | "medium" | "full" | "motion";
 export type BodyCoverage = "face" | "upper_body" | "three_quarter" | "full_body";
 export type BodyOrientation = "front" | "side" | "back_three_quarter" | "back";
+export type MouthState = "neutral" | "closed" | "slightly_open" | "teeth_visible";
 export type AnalysisSource = "browser-metadata" | "browser-face-detector" | "mediapipe-face-landmarker" | "mediapipe-pose-landmarker" | "geometry-heuristic" | "vlm" | "mock" | "unavailable";
 
 export type NormalizedBoundingBox = { x: number; y: number; width: number; height: number };
@@ -83,14 +84,18 @@ export type IdentityRequirement = {
   captureDurationSeconds: number;
   bestFrameCount: number;
   materials: string[];
+  expressionGuidance: string;
+  gazeGuidance: string;
+  mouthState: MouthState;
 };
 
 export type CaptureInstruction = {
   id: string;
   label: string;
   hint: string;
-  target: "front" | "left" | "right" | "distance" | "body";
+  target: "front" | "left" | "right" | "distance" | "body" | "expression";
   holdMs: number;
+  mouthState?: MouthState;
 };
 
 export type QualityMetric = { value: number | null; status: "good" | "warning" | "unavailable" };
@@ -100,6 +105,7 @@ export type CaptureFrame = {
   dataUrl: string;
   capturedAt: number;
   instructionId: string;
+  requestedMouthState?: MouthState;
   faceBox?: NormalizedBoundingBox;
   quality: {
     faceCount: QualityMetric;
@@ -161,6 +167,12 @@ export type GenerationRequest = {
   targetShot: TargetShot;
   preserveScene: boolean;
   intensity: number;
+  expressionPolicy: {
+    targetExpression: string;
+    targetGaze: string;
+    mouthState: MouthState;
+    hasMatchingExpressionFrame: boolean;
+  };
 };
 
 export type GenerationResult = { id: string; imageUrl: string; provider: "dashscope"; model: string; elapsedMs: number; requestId?: string };

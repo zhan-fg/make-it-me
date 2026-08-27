@@ -21,6 +21,7 @@ function validateInput(value: unknown): GenerationRequest {
   input.identityFrames.forEach((frame, index) => validateImage(frame?.image, `身份关键帧 ${index + 1}`));
   if (input.fullBodyImage) validateImage(input.fullBodyImage, "全身参考");
   if (!input.referenceAnalysis || !input.targetShot) throw new Error("缺少镜头分析结果");
+  if (!input.expressionPolicy) throw new Error("缺少表情生成策略");
   if (!input.referenceSize || input.referenceSize.width < 1 || input.referenceSize.height < 1) throw new Error("缺少参考图尺寸");
   if (["three_quarter", "full_body"].includes(input.referenceAnalysis.shot.body.coverage) && !input.fullBodyImage) throw new Error("中远景或全身镜头需要用户全身参考");
   return input as GenerationRequest;
@@ -52,9 +53,12 @@ function personBoundingBox(input: GenerationRequest) {
 }
 function generationPrompt(input: GenerationRequest) {
   const analysis = input.referenceAnalysis;
+  const expressionRule = input.expressionPolicy.mouthState === "teeth_visible" && input.expressionPolicy.hasMatchingExpressionFrame
+    ? "可以参考专门采集的露齿表情帧生成自然、克制的露齿微笑；保持目标人物真实唇形、牙齿比例和嘴角幅度，不要夸张笑容。"
+    : "不要生成或露出牙齿。只保留参考图的整体情绪语气，使用自然闭嘴或极轻微微笑；不得强行复刻原人物的嘴型、牙齿、嘴角幅度或面部肌肉。";
   return ["执行完整人物替换，生成一张高品质、写实、自然的仿拍照片。", "图1是镜头和环境参考。保留框外背景、光线、机位、构图、景别，以及框内人物的姿态、视线、表情和互动关系；彻底移除图1原人物的身份与身体外观。",
     `场景：${analysis.scene.summary}。光线：${analysis.scene.lightingContext || "沿用参考图"}。`, `构图：${analysis.shot.composition}；机位：${analysis.shot.cameraAngle}；景别：${analysis.shot.framing}。`,
-    `姿态：${analysis.shot.body.poseSummary}；视线：${analysis.shot.face.gaze}；表情：${analysis.shot.face.expression}。`,
+    `姿态：${analysis.shot.body.poseSummary}；视线：${input.expressionPolicy.targetGaze}；参考情绪：${input.expressionPolicy.targetExpression}。${expressionRule}`,
     `图2开始是同一目标人物的头肩身份参考，角度依次为：${input.identityFrames.map((frame) => frame.view).join("、")}。使用目标人物的完整头部身份：脸型、五官比例、眼睛、鼻子、嘴、耳朵、发际线、发型、发色、颈部与肤色。`,
     input.fullBodyImage ? "最后一张是目标人物全身参考。使用其真实体型、肩宽、身体比例和整体轮廓，同时复刻图1服装的款式、颜色与穿着关系。" : "根据头肩参考自然重建目标人物的肩颈与身体，不得沿用图1原人物的头发、肤色、体型或身体特征。",
     "重点保证头发与脸部属于同一目标人物，发际线自然，耳朵和脸颈肤色连续，头部光线与场景一致，严禁仅换脸或把目标人物的脸贴到图1原人物身体上。",
