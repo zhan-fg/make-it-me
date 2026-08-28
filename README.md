@@ -15,7 +15,7 @@ npm run dev
 
 - `services/portrait-templates.ts`：首批 AI 原创写真模板与自拍要求
 - `services/portrait-types.ts`：模板、生成请求和真实结果契约
-- `app/api/portrait-generate/route.ts`：校验模板与图片，在服务端调用 Gemini 多图生成
+- `app/api/portrait-generate/route.ts`：根据 `templateId` 在服务端读取固定模板，只接收用户自拍并调用 Gemini 多图生成
 - `app/page.tsx`：模板选择 → 自拍检查 → 真实生成 → 下载结果
 - 生成失败会显示真实错误，不会回退成 Mock 成功
 - 当前自拍检查包括格式、文件大小和最低分辨率；人脸数量、遮挡和清晰度评分是下一步增强项
