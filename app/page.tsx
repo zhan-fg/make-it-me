@@ -8,11 +8,6 @@ import type { PortraitGenerationResult, PortraitTemplate } from "@/services/port
 type Step = "templates" | "selfie" | "generating" | "result";
 type Selfie = { dataUrl: string; width: number; height: number; name: string };
 
-async function toDataUrl(source: string) {
-  const blob = await fetch(source).then((response) => { if (!response.ok) throw new Error("无法读取写真模板"); return response.blob(); });
-  return new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("无法读取写真模板")); reader.readAsDataURL(blob); });
-}
-
 async function prepareSelfie(file: File): Promise<Selfie> {
   if (!file.type.startsWith("image/")) throw new Error("请选择 JPEG、PNG 或 WebP 图片");
   if (file.size > 12 * 1024 * 1024) throw new Error("自拍图片不能超过 12MB");
@@ -40,7 +35,7 @@ export default function Home() {
   const generate = async () => {
     if (!template || !selfie) return; setError(undefined); setStep("generating");
     try {
-      const response = await fetch("/api/portrait-generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId: template.id, templateImage: await toDataUrl(template.coverImage), selfieImage: selfie.dataUrl }) });
+      const response = await fetch("/api/portrait-generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId: template.id, selfieImage: selfie.dataUrl }) });
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "写真生成失败"); setResult(payload); setStep("result");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "写真生成失败"); setStep("selfie"); }
   };
