@@ -247,3 +247,4 @@ export async function POST(request: Request) {
     return NextResponse.json(mockAnalysis(error instanceof Error ? error.message : "语义分析失败，已自动回退"));
   }
 }
+

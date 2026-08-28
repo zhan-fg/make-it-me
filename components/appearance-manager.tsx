@@ -68,3 +68,4 @@ export function AppearanceManager({ open, appearances, selectedId, onClose, onSe
     </div>
   </div>;
 }
+

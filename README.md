@@ -1,6 +1,6 @@
-# Make it me · 一键仿拍
+# Make it me · AI 写真
 
-移动优先的 AI 仿拍 Web Demo。流程覆盖参考素材分析、按镜头规划最小身份素材、引导式临时采集、本地关键帧筛选、DashScope/Wan2.7 真实生成与结果对比。
+移动优先的 AI 写真 Web Demo。当前主流程已收缩为：选择原创写真模板、上传一张自拍、通过 Gemini Nano Banana 多图参考生成写真、查看和下载真实结果。旧 Reference Analyzer 与 DashScope 仿拍模块仍保留在代码中，暂不作为首页主流程。
 
 ## 本地运行
 
@@ -9,7 +9,16 @@ npm install
 npm run dev
 ```
 
-复制 `.env.example` 为 `.env.local`。配置 `DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL` 和 `DASHSCOPE_ANALYZER_MODEL` 后，Reference Semantic Analyzer 会通过服务端调用 DashScope/Qwen 视觉模型。`ANALYZER_PROVIDER` 是可选覆盖项；未设置时会结合 `AI_PROVIDER` 和已配置的 Key 自动选择，优先使用 DashScope。密钥只由 `app/api/analyze/route.ts` 在服务端读取，不进入浏览器包。
+复制 `.env.example` 为 `.env.local`。写真主流程需要配置 `GEMINI_API_KEY`，可通过 `GEMINI_IMAGE_MODEL` 选择图片模型，默认使用 `gemini-3.1-flash-image`。密钥只由 `app/api/portrait-generate/route.ts` 在服务端读取，不进入浏览器包。
+
+## 写真主流程
+
+- `services/portrait-templates.ts`：首批 AI 原创写真模板与自拍要求
+- `services/portrait-types.ts`：模板、生成请求和真实结果契约
+- `app/api/portrait-generate/route.ts`：校验模板与图片，在服务端调用 Gemini 多图生成
+- `app/page.tsx`：模板选择 → 自拍检查 → 真实生成 → 下载结果
+- 生成失败会显示真实错误，不会回退成 Mock 成功
+- 当前自拍检查包括格式、文件大小和最低分辨率；人脸数量、遮挡和清晰度评分是下一步增强项
 
 远程 VLM 与图片生成不再要求体验访问码。公开部署仍通过服务端请求频率限制和图片大小限制控制滥用，图片生成继续使用现有 `AI_PROVIDER` 配置。
 
