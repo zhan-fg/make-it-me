@@ -12,7 +12,6 @@ export type PortraitTemplate = {
 
 export type PortraitGenerationRequest = {
   templateId: string;
-  templateImage: string;
   selfieImage: string;
 };
 
