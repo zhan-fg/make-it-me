@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { guardApiRequest } from "@/lib/api-security";
 import { getPortraitTemplate } from "@/services/portrait-templates";
 import type { PortraitGenerationRequest } from "@/services/portrait-types";
@@ -12,6 +14,17 @@ function imagePart(value: unknown, label: string) {
   if (!match) throw new Error(`${label}必须是 JPEG、PNG 或 WebP 图片`);
   if (match[2].length > 14_000_000) throw new Error(`${label}超过 10MB 限制`);
   return { inlineData: { mimeType: match[1].replace("jpg", "jpeg"), data: match[2] } };
+}
+
+async function templateImagePart(coverImage: string) {
+  const relativePath = coverImage.replace(/^\/+/, "");
+  const absolutePath = path.join(process.cwd(), "public", relativePath.replace(/^templates\//, "templates/"));
+  const publicRoot = path.resolve(process.cwd(), "public");
+  if (!path.resolve(absolutePath).startsWith(`${publicRoot}${path.sep}`)) throw new Error("写真模板路径不正确");
+  const data = await readFile(absolutePath);
+  const extension = path.extname(absolutePath).toLowerCase();
+  const mimeType = extension === ".png" ? "image/png" : extension === ".webp" ? "image/webp" : "image/jpeg";
+  return { inlineData: { mimeType, data: data.toString("base64") } };
 }
 
 function prompt(template: NonNullable<ReturnType<typeof getPortraitTemplate>>) {
@@ -41,7 +54,7 @@ export async function POST(request: Request) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [imagePart(input.templateImage, "模板图片"), imagePart(input.selfieImage, "自拍图片"), { text: prompt(template) }] }],
+        contents: [{ role: "user", parts: [await templateImagePart(template.coverImage), imagePart(input.selfieImage, "自拍图片"), { text: prompt(template) }] }],
         generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: template.aspectRatio } },
       }),
       signal: AbortSignal.timeout(285_000),
