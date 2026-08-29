@@ -13,7 +13,7 @@ export type PortraitTemplate = {
 
 export type PortraitGenerationRequest = {
   templateId: string;
-  selfieImage: string;
+  selfieImageUrl: string;
 };
 
 export type PortraitGenerationResult = {
@@ -28,6 +28,8 @@ export type PortraitGenerationResult = {
     geminiMs: number;
     responseParseMs: number;
     serverTotalMs: number;
+    resultStorageMs: number;
+    selfieUploadMs?: number;
     clientRoundTripMs?: number;
   };
   requestId?: string;
