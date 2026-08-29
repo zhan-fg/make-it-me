@@ -1,7 +1,7 @@
 export type PortraitTemplate = {
   id: string;
   title: string;
-  category: "professional" | "korean" | "new_chinese" | "hong_kong";
+  category: "professional" | "korean" | "new_chinese" | "hong_kong" | "french" | "outdoor" | "art" | "seasonal" | "travel" | "mens";
   coverImage: string;
   prompt: string;
   selfieRequirements: string[];
