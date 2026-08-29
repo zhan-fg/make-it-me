@@ -54,9 +54,14 @@ export default function Home() {
   const pick = async (file?: File) => { if (!file) return; try { setError(undefined); setSelfie(await prepareSelfie(file)); } catch (reason) { setSelfie(undefined); setError(reason instanceof Error ? reason.message : "自拍检查失败"); } if (input.current) input.current.value = ""; };
   const generate = async () => {
     if (!template || !selfie) return; setError(undefined); setStep("generating");
+    const requestStartedAt = performance.now();
     try {
       const response = await fetch("/api/portrait-generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId: template.id, selfieImage: selfie.dataUrl }) });
-      const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "写真生成失败"); setResult(payload); setStep("result");
+      const payload = await response.json();
+      const clientRoundTripMs = performance.now() - requestStartedAt;
+      if (!response.ok) throw new Error(`${payload.error || "写真生成失败"}（总耗时 ${(clientRoundTripMs / 1000).toFixed(1)} 秒${payload.requestId ? `，追踪号 ${payload.requestId}` : ""}）`);
+      payload.timings = { ...payload.timings, clientRoundTripMs: Math.round(clientRoundTripMs) };
+      setResult(payload); setStep("result");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "写真生成失败"); setStep("selfie"); }
   };
   return <main className="min-h-screen bg-[#efede9] text-[#211f1d]">
@@ -88,6 +93,11 @@ function SelfiePage({ template, selfie, error, back, pick, generate }: { templat
 function Loading({ template }: { template: PortraitTemplate }) { return <div className="mx-auto grid min-h-[70vh] max-w-xl place-items-center px-5 text-center"><div><img src={template.coverImage} alt={template.title} className="mx-auto aspect-[3/4] w-56 animate-pulse rounded-[28px] object-cover opacity-60"/><IconSparkles className="mx-auto mt-7 animate-pulse"/><h1 className="mt-4 text-2xl font-semibold">正在生成你的写真</h1><p className="mt-3 text-sm leading-6 text-[#746e69]">正在保持你的身份，并重建模板的妆造、服装、光线与场景。请不要关闭页面。</p></div></div>; }
 
 function Result({ template, result, again, reset }: { template: PortraitTemplate; result: PortraitGenerationResult; again: () => void; reset: () => void }) {
-  return <div className="mx-auto max-w-5xl px-5 pb-20"><div className="py-8 text-center"><span className="text-xs tracking-[.15em] text-[#806252]">PORTRAIT READY</span><h1 className="mt-3 text-4xl font-semibold">这是你的写真</h1><p className="mt-3 text-sm text-[#746e69]">{result.model} · {(result.elapsedMs / 1000).toFixed(1)} 秒</p></div><div className="grid gap-5 sm:grid-cols-2"><img src={template.coverImage} alt="写真模板" className="aspect-[3/4] w-full rounded-[28px] object-cover"/><img src={result.imageUrl} alt="生成写真" className="aspect-[3/4] w-full rounded-[28px] bg-white object-cover"/></div><p className="mt-3 flex justify-center gap-2 text-sm"><IconCheck size={16}/>Gemini 真实生成</p><div className="mt-7 flex flex-wrap justify-center gap-3"><a href={result.imageUrl} download={`make-it-me-${template.id}.png`} className="flex items-center gap-2 rounded-full bg-[#201e1c] px-5 py-3 text-sm text-white"><IconDownload size={17}/>保存写真</a><button onClick={again} className="rounded-full bg-white px-5 py-3 text-sm">重新生成</button><button onClick={reset} className="rounded-full bg-white px-5 py-3 text-sm">其他模板</button></div></div>;
+  const timingItems = [
+    ["网络与浏览器", Math.max(0, (result.timings.clientRoundTripMs || result.timings.serverTotalMs) - result.timings.serverTotalMs)],
+    ["请求解析", result.timings.requestParseMs], ["模板读取", result.timings.templateLoadMs],
+    ["Gemini 生成", result.timings.geminiMs], ["结果解析", result.timings.responseParseMs],
+  ] as const;
+  return <div className="mx-auto max-w-5xl px-5 pb-20"><div className="py-8 text-center"><span className="text-xs tracking-[.15em] text-[#806252]">PORTRAIT READY</span><h1 className="mt-3 text-4xl font-semibold">这是你的写真</h1><p className="mt-3 text-sm text-[#746e69]">{result.model} · 浏览器总耗时 {((result.timings.clientRoundTripMs || result.elapsedMs) / 1000).toFixed(1)} 秒</p></div><div className="grid gap-5 sm:grid-cols-2"><img src={template.coverImage} alt="写真模板" className="aspect-[3/4] w-full rounded-[28px] object-cover"/><img src={result.imageUrl} alt="生成写真" className="aspect-[3/4] w-full rounded-[28px] bg-white object-cover"/></div><p className="mt-3 flex justify-center gap-2 text-sm"><IconCheck size={16}/>Gemini 真实生成</p><section className="mx-auto mt-6 max-w-2xl rounded-2xl bg-white p-5"><div className="flex items-center justify-between"><h2 className="font-semibold">生成耗时分析</h2><span className="text-xs text-[#807973]">服务端 {(result.timings.serverTotalMs / 1000).toFixed(1)} 秒</span></div><div className="mt-4 grid gap-3 sm:grid-cols-5">{timingItems.map(([label, value]) => <div key={label} className="rounded-xl bg-[#f5f2ee] p-3"><p className="text-[11px] text-[#7e7771]">{label}</p><p className="mt-1 font-semibold">{value < 1000 ? `${Math.round(value)} ms` : `${(value / 1000).toFixed(1)} s`}</p></div>)}</div>{result.requestId && <p className="mt-3 text-[11px] text-[#918a84]">追踪号：{result.requestId}</p>}</section><div className="mt-7 flex flex-wrap justify-center gap-3"><a href={result.imageUrl} download={`make-it-me-${template.id}.png`} className="flex items-center gap-2 rounded-full bg-[#201e1c] px-5 py-3 text-sm text-white"><IconDownload size={17}/>保存写真</a><button onClick={again} className="rounded-full bg-white px-5 py-3 text-sm">重新生成</button><button onClick={reset} className="rounded-full bg-white px-5 py-3 text-sm">其他模板</button></div></div>;
 }
 
