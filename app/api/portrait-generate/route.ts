@@ -40,42 +40,67 @@ function prompt(template: NonNullable<ReturnType<typeof getPortraitTemplate>>) {
 }
 
 export async function POST(request: Request) {
+  const requestStartedAt = performance.now();
+  const requestId = crypto.randomUUID();
+  let requestParseMs = 0;
+  let templateLoadMs = 0;
+  let geminiMs = 0;
+  let responseParseMs = 0;
+  let templateId = "unknown";
+  let model = process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image";
   try {
     const guard = guardApiRequest(request, "portrait-generate");
     if (guard) return NextResponse.json({ error: guard.error }, { status: guard.status });
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "服务端尚未配置 GEMINI_API_KEY" }, { status: 503 });
+    const requestParseStartedAt = performance.now();
     const input = await request.json() as Partial<PortraitGenerationRequest>;
-    const template = getPortraitTemplate(String(input.templateId || ""));
+    requestParseMs = performance.now() - requestParseStartedAt;
+    templateId = String(input.templateId || "");
+    const template = getPortraitTemplate(templateId);
     if (!template) return NextResponse.json({ error: "写真模板不存在或已下线" }, { status: 400 });
-    const model = process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image";
-    const startedAt = Date.now();
+    const templateLoadStartedAt = performance.now();
+    const templatePart = await templateImagePart(template.coverImage);
+    templateLoadMs = performance.now() - templateLoadStartedAt;
+    const geminiStartedAt = performance.now();
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [await templateImagePart(template.coverImage), imagePart(input.selfieImage, "自拍图片"), { text: prompt(template) }] }],
+        contents: [{ role: "user", parts: [templatePart, imagePart(input.selfieImage, "自拍图片"), { text: prompt(template) }] }],
         generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: template.aspectRatio } },
       }),
       signal: AbortSignal.timeout(285_000),
     });
+    geminiMs = performance.now() - geminiStartedAt;
+    const responseParseStartedAt = performance.now();
     const payload = await response.json();
+    responseParseMs = performance.now() - responseParseStartedAt;
     if (!response.ok) throw new Error(payload.error?.message || `Gemini 请求失败（HTTP ${response.status}）`);
     const parts = payload.candidates?.[0]?.content?.parts || [];
     const output = parts.find((part: { inlineData?: { mimeType?: string; data?: string } }) => part.inlineData?.data)?.inlineData;
     if (!output?.data) throw new Error("Gemini 未返回图片，请调整自拍或更换模板重试");
+    const serverTotalMs = performance.now() - requestStartedAt;
+    const timings = { requestParseMs, templateLoadMs, geminiMs, responseParseMs, serverTotalMs };
+    const providerRequestId = response.headers.get("x-request-id") || undefined;
+    console.info("portrait_generation_timing", JSON.stringify({ requestId, providerRequestId, templateId, model, status: "success", ...timings }));
     return NextResponse.json({
       id: `portrait-${Date.now()}`,
       imageUrl: `data:${output.mimeType || "image/png"};base64,${output.data}`,
       provider: "gemini",
       model,
-      elapsedMs: Date.now() - startedAt,
-      requestId: response.headers.get("x-request-id") || undefined,
-    });
+      elapsedMs: Math.round(serverTotalMs),
+      timings,
+      requestId,
+      providerRequestId,
+    }, { headers: { "Server-Timing": `parse;dur=${requestParseMs.toFixed(1)}, template;dur=${templateLoadMs.toFixed(1)}, gemini;dur=${geminiMs.toFixed(1)}, response;dur=${responseParseMs.toFixed(1)}, total;dur=${serverTotalMs.toFixed(1)}` } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "写真生成失败";
     const timeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
-    return NextResponse.json({ error: timeout ? "写真生成超时，请稍后重试" : message }, { status: timeout ? 504 : 500 });
+    const serverTotalMs = performance.now() - requestStartedAt;
+    const timings = { requestParseMs, templateLoadMs, geminiMs, responseParseMs, serverTotalMs };
+    console.error("portrait_generation_timing", JSON.stringify({ requestId, templateId, model, status: timeout ? "timeout" : "error", error: message, ...timings }));
+    return NextResponse.json({ error: timeout ? "写真生成超时，请稍后重试" : message, requestId, timings }, { status: timeout ? 504 : 500, headers: { "Server-Timing": `parse;dur=${requestParseMs.toFixed(1)}, template;dur=${templateLoadMs.toFixed(1)}, gemini;dur=${geminiMs.toFixed(1)}, response;dur=${responseParseMs.toFixed(1)}, total;dur=${serverTotalMs.toFixed(1)}` } });
   }
 }
 
