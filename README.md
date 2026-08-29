@@ -13,7 +13,7 @@ npm run dev
 
 ## 写真主流程
 
-- `services/portrait-templates.ts`：35 套 AI 原创写真模板与自拍要求，覆盖职场、韩式、日系、复古、礼服、东方、港风、法式、户外、四季、全球旅拍、艺术、男士和常用证件照风格
+- `services/portrait-templates.ts`：45 套 AI 原创写真模板与自拍要求，覆盖职场、韩式、日系、复古、礼服、东方、港风、法式、户外、四季、全球旅拍、超写实个性艺术、男士和常用证件照风格
 - `services/portrait-types.ts`：模板、生成请求和真实结果契约
 - `app/api/portrait-generate/route.ts`：根据 `templateId` 在服务端读取固定模板，只接收用户自拍并调用 Gemini 多图生成
 - `app/page.tsx`：模板选择 → 自拍检查 → 真实生成 → 下载结果

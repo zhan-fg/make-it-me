@@ -37,6 +37,7 @@ function prompt(template: NonNullable<ReturnType<typeof getPortraitTemplate>>) {
   return [
     "你是一名专业人像摄影与高端商业修图师。图1是写真模板，图2是用户本人自拍。生成一张全新的、真实摄影质感的竖版写真。",
     `写真方案：${template.prompt}`,
+    "成片必须是超写实真人摄影：呈现真实皮肤毛孔与细微纹理、独立自然发丝、准确人体结构、真实布料与材质、符合物理规律的光影和全画幅相机镜头质感；禁止插画感、CG 感、游戏建模感、蜡像感和塑料皮肤。",
     "必须保持图2用户的身份：脸型骨骼、五官比例、眼睛、鼻子、嘴唇、耳朵与可识别特征。不得复制图1模特的身份。",
     appearanceRule,
     retouchRule,
