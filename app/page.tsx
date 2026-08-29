@@ -6,7 +6,16 @@ import { portraitTemplates } from "@/services/portrait-templates";
 import type { PortraitGenerationResult, PortraitTemplate } from "@/services/portrait-types";
 
 type Step = "templates" | "selfie" | "generating" | "result";
-type Selfie = { dataUrl: string; width: number; height: number; name: string };
+type Selfie = { dataUrl: string; width: number; height: number; name: string; originalBytes: number; uploadBytes: number };
+
+function dataUrlBytes(value: string) {
+  const base64 = value.split(",")[1] || "";
+  return Math.floor(base64.length * .75);
+}
+
+function formatBytes(value: number) {
+  return value >= 1024 * 1024 ? `${(value / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(value / 1024))}KB`;
+}
 
 async function prepareSelfie(file: File): Promise<Selfie> {
   if (!file.type.startsWith("image/")) throw new Error("请选择 JPEG、PNG 或 WebP 图片");
@@ -15,10 +24,21 @@ async function prepareSelfie(file: File): Promise<Selfie> {
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => { const value = new Image(); value.onload = () => resolve(value); value.onerror = () => reject(new Error("无法读取自拍图片")); value.src = source; });
     if (Math.min(image.naturalWidth, image.naturalHeight) < 640) throw new Error("自拍分辨率过低，短边至少需要 640px");
-    const scale = Math.min(1, 1536 / Math.max(image.naturalWidth, image.naturalHeight));
+    const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
     const canvas = document.createElement("canvas"); canvas.width = Math.round(image.naturalWidth * scale); canvas.height = Math.round(image.naturalHeight * scale);
-    canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return { dataUrl: canvas.toDataURL("image/jpeg", .9), width: image.naturalWidth, height: image.naturalHeight, name: file.name };
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("当前浏览器无法压缩图片");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    let quality = .92;
+    let dataUrl = canvas.toDataURL("image/jpeg", quality);
+    while (dataUrlBytes(dataUrl) > 1_600_000 && quality > .84) {
+      quality -= .02;
+      dataUrl = canvas.toDataURL("image/jpeg", quality);
+    }
+    if (dataUrlBytes(dataUrl) > 2_000_000) throw new Error("自拍在保持高画质后仍超过 2MB，请选择尺寸稍小的原图");
+    return { dataUrl, width: image.naturalWidth, height: image.naturalHeight, name: file.name, originalBytes: file.size, uploadBytes: dataUrlBytes(dataUrl) };
   } finally { URL.revokeObjectURL(source); }
 }
 
@@ -54,7 +74,7 @@ function Gallery({ choose }: { choose: (template: PortraitTemplate) => void }) {
 }
 
 function SelfiePage({ template, selfie, error, back, pick, generate }: { template: PortraitTemplate; selfie?: Selfie; error?: string; back: () => void; pick: () => void; generate: () => void }) {
-  return <div className="mx-auto max-w-5xl px-5 pb-20"><button onClick={back} className="mt-5 flex items-center gap-2 text-sm"><IconArrowLeft size={16}/>重新选择模板</button><div className="mt-7 grid gap-7 lg:grid-cols-2"><section><img src={template.coverImage} alt={template.title} className="aspect-[3/4] w-full rounded-[28px] object-cover"/><h2 className="mt-4 text-xl font-semibold">{template.title}</h2><p className="mt-2 text-sm leading-6 text-[#716c67]">{template.prompt}</p></section><section className="rounded-[28px] bg-white p-6 sm:p-8"><span className="text-xs tracking-[.15em] text-[#806252]">YOUR SELFIE</span><h1 className="mt-3 text-3xl font-semibold">上传一张清晰自拍</h1><div className="mt-5 space-y-3">{template.selfieRequirements.map((item) => <div key={item} className="flex items-center gap-3 text-sm"><span className="grid h-6 w-6 place-items-center rounded-full bg-[#e9f4dd]"><IconCheck size={14}/></span>{item}</div>)}</div>{selfie ? <div className="mt-6"><img src={selfie.dataUrl} alt="用户自拍" className="aspect-[3/4] w-full rounded-2xl object-cover"/><p className="mt-2 text-xs text-[#746e69]">{selfie.name} · {selfie.width} × {selfie.height}</p><button onClick={pick} className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f2efeb] py-3 text-sm"><IconRefresh size={16}/>更换自拍</button></div> : <button onClick={pick} className="mt-7 grid aspect-[4/3] w-full place-items-center rounded-2xl border border-dashed bg-[#f8f6f3]"><span className="text-center"><IconUpload className="mx-auto"/><b className="mt-3 block text-sm">选择自拍照片</b><small className="mt-1 block text-[#837c76]">短边至少 640px，最大 12MB</small></span></button>}{error && <div role="alert" className="mt-4 rounded-2xl bg-[#fff0ed] p-4 text-sm text-[#963b31]"><b>真实生成失败</b><p className="mt-1">{error}</p><p className="mt-2 text-xs">没有使用 Mock 图片。</p></div>}<button disabled={!selfie} onClick={generate} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#201e1c] py-4 text-white disabled:opacity-35"><IconSparkles size={18}/>生成我的写真</button><p className="mt-4 text-center text-[11px] text-[#8d8680]">当前版本不会把自拍保存到用户资产库。</p></section></div></div>;
+  return <div className="mx-auto max-w-5xl px-5 pb-20"><button onClick={back} className="mt-5 flex items-center gap-2 text-sm"><IconArrowLeft size={16}/>重新选择模板</button><div className="mt-7 grid gap-7 lg:grid-cols-2"><section><img src={template.coverImage} alt={template.title} className="aspect-[3/4] w-full rounded-[28px] object-cover"/><h2 className="mt-4 text-xl font-semibold">{template.title}</h2><p className="mt-2 text-sm leading-6 text-[#716c67]">{template.prompt}</p></section><section className="rounded-[28px] bg-white p-6 sm:p-8"><span className="text-xs tracking-[.15em] text-[#806252]">YOUR SELFIE</span><h1 className="mt-3 text-3xl font-semibold">上传一张清晰自拍</h1><div className="mt-5 space-y-3">{template.selfieRequirements.map((item) => <div key={item} className="flex items-center gap-3 text-sm"><span className="grid h-6 w-6 place-items-center rounded-full bg-[#e9f4dd]"><IconCheck size={14}/></span>{item}</div>)}</div>{selfie ? <div className="mt-6"><img src={selfie.dataUrl} alt="用户自拍" className="aspect-[3/4] w-full rounded-2xl object-cover"/><p className="mt-2 text-xs text-[#746e69]">{selfie.name} · {selfie.width} × {selfie.height}</p><p className="mt-2 rounded-xl bg-[#eef7e8] px-3 py-2 text-xs text-[#52703d]">高画质等比压缩：{formatBytes(selfie.originalBytes)} → {formatBytes(selfie.uploadBytes)}</p><button onClick={pick} className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f2efeb] py-3 text-sm"><IconRefresh size={16}/>更换自拍</button></div> : <button onClick={pick} className="mt-7 grid aspect-[4/3] w-full place-items-center rounded-2xl border border-dashed bg-[#f8f6f3]"><span className="text-center"><IconUpload className="mx-auto"/><b className="mt-3 block text-sm">选择自拍照片</b><small className="mt-1 block text-[#837c76]">短边至少 640px，高画质等比压缩</small></span></button>}{error && <div role="alert" className="mt-4 rounded-2xl bg-[#fff0ed] p-4 text-sm text-[#963b31]"><b>真实生成失败</b><p className="mt-1">{error}</p><p className="mt-2 text-xs">没有使用 Mock 图片。</p></div>}<button disabled={!selfie} onClick={generate} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#201e1c] py-4 text-white disabled:opacity-35"><IconSparkles size={18}/>生成我的写真</button><p className="mt-4 text-center text-[11px] text-[#8d8680]">当前版本不会把自拍保存到用户资产库。</p></section></div></div>;
 }
 
 function Loading({ template }: { template: PortraitTemplate }) { return <div className="mx-auto grid min-h-[70vh] max-w-xl place-items-center px-5 text-center"><div><img src={template.coverImage} alt={template.title} className="mx-auto aspect-[3/4] w-56 animate-pulse rounded-[28px] object-cover opacity-60"/><IconSparkles className="mx-auto mt-7 animate-pulse"/><h1 className="mt-4 text-2xl font-semibold">正在生成你的写真</h1><p className="mt-3 text-sm leading-6 text-[#746e69]">正在保持你的身份，并重建模板的妆造、服装、光线与场景。请不要关闭页面。</p></div></div>; }
