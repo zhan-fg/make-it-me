@@ -21,6 +21,15 @@ export type PortraitGenerationResult = {
   provider: "gemini";
   model: string;
   elapsedMs: number;
+  timings: {
+    requestParseMs: number;
+    templateLoadMs: number;
+    geminiMs: number;
+    responseParseMs: number;
+    serverTotalMs: number;
+    clientRoundTripMs?: number;
+  };
   requestId?: string;
+  providerRequestId?: string;
 };
 
