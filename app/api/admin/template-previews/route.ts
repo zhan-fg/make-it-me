@@ -1,6 +1,9 @@
 import { del, get, list, put } from "@vercel/blob";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { NextResponse } from "next/server";
+import { buildPortraitPrompt } from "@/services/portrait-prompt";
 import { getPortraitTemplate } from "@/services/portrait-templates";
 
 export const runtime = "nodejs";
@@ -16,15 +19,10 @@ function authorized(request: Request, secret: string) {
   return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
-function previewPrompt(template: NonNullable<ReturnType<typeof getPortraitTemplate>>) {
-  return [
-    "生成一张用于 AI 写真产品模板卡片的竖版样片。样片人物必须是虚构的成年模特，不得模仿任何真实公众人物。",
-    `写真方案：${template.prompt}`,
-    "严格执行写真方案中的服装、妆发、姿势、构图、景别、机位、灯光、背景和色彩。",
-    "成片必须是超写实真人摄影，具有真实皮肤纹理、自然独立发丝、准确人体结构、真实布料材质、符合物理规律的光影和全画幅相机质感。",
-    "进行自然商业精修：均匀肤色、去除明显痘印黑眼圈和泛红、适度磨皮提亮并保留真实皮肤纹理；不大眼、不夸张瘦脸、不强行露齿。",
-    "禁止插画、CG、游戏建模、蜡像、塑料皮肤、拼贴、文字、水印和品牌标志。只输出一张最终写真照片。",
-  ].join("\n");
+async function baselineModelPart(gender: "female" | "male") {
+  const file = path.join(process.cwd(), "public", "baseline-models", `${gender}-front.jpg`);
+  const data = await readFile(file);
+  return { inlineData: { mimeType: "image/jpeg", data: data.toString("base64") } };
 }
 
 function signedPreviewUrl(request: Request, blobUrl: string, secret: string) {
@@ -46,7 +44,7 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "服务端尚未配置 GEMINI_API_KEY" }, { status: 503 });
 
   try {
-    const input = await request.json() as { templateIds?: unknown; confirm?: unknown };
+    const input = await request.json() as { templateIds?: unknown; confirm?: unknown; baselineGender?: unknown };
     if (input.confirm !== confirmation) return NextResponse.json({ error: `请传入 confirm: ${confirmation}` }, { status: 400 });
     if (!Array.isArray(input.templateIds)) return NextResponse.json({ error: "templateIds 必须是数组" }, { status: 400 });
     const templateIds = [...new Set(input.templateIds.filter((value): value is string => typeof value === "string"))];
@@ -59,11 +57,15 @@ export async function POST(request: Request) {
       }
       const startedAt = performance.now();
       try {
+        const forcedGender = input.baselineGender === "female" || input.baselineGender === "male" ? input.baselineGender : undefined;
+        const baselineGender = forcedGender || (template.audience === "male" ? "male" : "female");
+        const baselinePart = await baselineModelPart(baselineGender);
+        const generationPrompt = buildPortraitPrompt(template, "template");
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: previewPrompt(template) }] }],
+            contents: [{ role: "user", parts: [baselinePart, { text: generationPrompt }] }],
             generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: template.aspectRatio } },
           }),
           signal: AbortSignal.timeout(110_000),
@@ -86,8 +88,9 @@ export async function POST(request: Request) {
           status: "success" as const,
           imageUrl: signedPreviewUrl(request, blob.url, apiKey),
           blobUrl: blob.url,
+          baselineGender,
           model,
-          prompt: previewPrompt(template),
+          prompt: generationPrompt,
           elapsedMs: Math.round(performance.now() - startedAt),
           providerRequestId: response.headers.get("x-request-id") || undefined,
         };

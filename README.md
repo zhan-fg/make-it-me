@@ -34,6 +34,8 @@ npm run dev
 - 草稿写入私有 Vercel Blob，不会自动覆盖正式模板；返回的审核链接有效期为 24 小时
 - `/admin/templates` 提供管理员工作台，可选择全部模板、每批 5 张连续生成、在线审核、重新生成和发布
 - 发布后的正式封面保存在私有 Blob；首页通过 `/api/template-covers` 一次读取封面映射，未发布模板自动回退到 `public/templates`
+- `public/baseline-models` 保存虚构男女基准模特自拍；模板生成默认按 `audience` 自动选择，管理员也可强制使用男模或女模
+- `services/portrait-prompt.ts` 是模板草稿和用户写真共用的专业摄影 Prompt 编译器，统一约束景别、人物比例、画面位置、裁切、方向、机位、焦段、灯光、环境融合、姿势和商业精修
 
 远程 VLM 与图片生成不再要求体验访问码。公开部署仍通过服务端请求频率限制和图片大小限制控制滥用，图片生成继续使用现有 `AI_PROVIDER` 配置。
 
