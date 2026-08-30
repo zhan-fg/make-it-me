@@ -16,9 +16,10 @@ npm run dev
 - `services/portrait-templates.ts`：45 套 AI 原创写真模板与自拍要求，覆盖职场、韩式、日系、复古、礼服、东方、港风、法式、户外、四季、全球旅拍、超写实个性艺术、男士和常用证件照风格
 - `services/portrait-types.ts`：模板、生成请求和真实结果契约
 - `app/api/image-upload/route.ts`：将浏览器压缩后的自拍写入 Vercel Blob，只向前端返回图片 URL
-- `app/api/portrait-generate/route.ts`：根据 `templateId` 在服务端读取固定模板，通过自拍 URL 获取图片并调用 Gemini 多图生成；生成结果写入 Blob 后只返回 URL
+- `app/api/portrait-generate/route.ts`：根据 `templateId` 在服务端读取固定写真提示词，自拍是发送给 Gemini 的唯一图片和身份来源；生成结果写入 Blob 后只返回 URL
 - `app/page.tsx`：模板选择 → 自拍检查 → 真实生成 → 下载结果
 - 自拍在浏览器本地保持原始宽高比缩放至最长边 1600px，使用高质量重采样与不低于 84% 的 JPEG 质量，优先保留人脸细节且不裁切、不拉伸
+- 模板图片只用于前端选片预览，不发送给 Gemini，避免模板模特人脸与用户身份发生融合
 - 浏览器与写真 API 之间不传 Base64：自拍和生成结果均使用私有 Vercel Blob URL；自拍读取后立即删除，成片通过一小时有效的签名应用 URL 展示
 - 生成失败会显示真实错误，不会回退成 Mock 成功
 - 生成链路记录自拍上传、请求解析、模板/自拍读取、Gemini 生成、结果解析、结果存储、服务端总耗时和浏览器往返耗时；成功页显示耗时明细，Vercel 日志输出 `portrait_generation_timing` 结构化记录
