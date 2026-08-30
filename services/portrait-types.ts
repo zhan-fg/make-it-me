@@ -4,6 +4,7 @@ export type PortraitTemplate = {
   category: "professional" | "korean" | "japanese" | "retro" | "bridal" | "new_chinese" | "hong_kong" | "french" | "outdoor" | "art" | "seasonal" | "travel" | "mens" | "id_photo";
   audience: "female" | "male" | "unisex";
   coverImage: string;
+  identityNeutralImage?: string;
   prompt: string;
   selfieRequirements: string[];
   tags: string[];
