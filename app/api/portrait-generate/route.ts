@@ -36,16 +36,17 @@ async function templateImagePart(coverImage: string) {
 
 function prompt(template: NonNullable<ReturnType<typeof getPortraitTemplate>>) {
   const appearanceRule = template.category === "id_photo"
-    ? "这是证件照任务：必须原样保留图2用户本人的脸型、面部骨骼、五官比例、发型、发际线、头发长度与真实身份，仅按图1规范服装、纯色背景、正面机位、头肩比例与均匀光线；不得瘦脸、改变脸型、改变发型、增加发量、添加明显妆容或制造写真姿势。"
-    : "继承图1的服装设计、妆容方向、发型风格、姿势、构图、景别、机位、灯光、背景与色彩，但根据用户本人自然适配头发和身体比例。";
+    ? "这是证件照任务：必须原样保留图1用户本人的脸型、面部骨骼、五官比例、发型、发际线、头发长度与真实身份，仅按图2规范服装、纯色背景、正面机位、头肩比例与均匀光线；不得瘦脸、改变脸型、改变发型、增加发量、添加明显妆容或制造写真姿势。"
+    : "只继承图2模板的服装设计、妆容方向、发型风格、姿势、构图、景别、机位、灯光、背景与色彩，人物身份必须完全来自图1用户自拍，并根据用户本人自然适配头发和身体比例。";
   const retouchRule = template.category === "id_photo"
     ? "证件照只允许轻微磨皮和轻微均匀肤色，保留皮肤纹理、痣、面部轮廓与本人真实特征；不得去除全部皮肤细节，不得美白过度，不得瘦脸、大眼或改变脸型、发型、眼睛、鼻子、嘴唇和表情。"
     : "进行自然商业精修：均匀肤色、去除痘印黑眼圈和泛红、适度磨皮提亮、增加皮肤光泽感、轻微收紧面颊与下颌；保留真实皮肤纹理，不大眼，不改变鼻子嘴唇，不强行露齿。";
   return [
-    "你是一名专业人像摄影与高端商业修图师。图1是写真模板，图2是用户本人自拍。生成一张全新的、真实摄影质感的竖版写真。",
+    "你是一名专业人像摄影与高端商业修图师。图1是必须保留身份的用户本人自拍，图2只是写真风格与构图模板。生成一张全新的、真实摄影质感的竖版写真。",
     `写真方案：${template.prompt}`,
     "成片必须是超写实真人摄影：呈现真实皮肤毛孔与细微纹理、独立自然发丝、准确人体结构、真实布料与材质、符合物理规律的光影和全画幅相机镜头质感；禁止插画感、CG 感、游戏建模感、蜡像感和塑料皮肤。",
-    "必须保持图2用户的身份：脸型骨骼、五官比例、眼睛、鼻子、嘴唇、耳朵与可识别特征。不得复制图1模特的身份。",
+    "最高优先级：最终人物必须能明确识别为图1用户本人，保持其脸型骨骼、五官比例、眼睛、鼻子、嘴唇、耳朵与可识别特征。图2人物只用于展示造型，不得复制图2模特的脸、身份或直接输出模板原图。",
+    "必须重新生成图1用户进入图2场景后的照片；如果人物仍像图2模特而不像图1用户，则结果不合格。",
     appearanceRule,
     retouchRule,
     "头发、脸部、颈部、身体和服装必须属于同一个人，边缘、光线、阴影、景深与背景自然融合；禁止换脸拼贴、双重发型、塑料皮肤、多余人物、文字、水印。",
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [templatePart, selfiePart, { text: prompt(template) }] }],
+        contents: [{ role: "user", parts: [selfiePart, templatePart, { text: prompt(template) }] }],
         generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: template.aspectRatio } },
       }),
       signal: AbortSignal.timeout(285_000),
