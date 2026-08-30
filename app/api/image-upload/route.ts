@@ -17,7 +17,8 @@ export async function POST(request: Request) {
     if (!allowedTypes.has(contentType)) return NextResponse.json({ error: "仅支持 JPEG、PNG 或 WebP 图片" }, { status: 415 });
     if (!contentLength || contentLength > 2_100_000) return NextResponse.json({ error: "上传图片不能超过 2MB" }, { status: 413 });
     const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
-    const blob = await put(`selfies/${crypto.randomUUID()}.${extension}`, request.body, { access: "private", addRandomSuffix: true, contentType });
+    const image = await request.arrayBuffer();
+    const blob = await put(`selfies/${crypto.randomUUID()}.${extension}`, image, { access: "private", addRandomSuffix: true, contentType });
     return NextResponse.json({ url: blob.url });
   } catch (error) {
     const message = error instanceof Error ? error.message : "自拍上传失败";
