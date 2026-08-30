@@ -1,7 +1,7 @@
-import type { PortraitTemplate } from "./portrait-types";
+import type { PortraitRetouchSettings, PortraitTemplate } from "./portrait-types";
 
 export type PortraitPromptMode = "template" | "user";
-export type PortraitPromptOptions = { beautyLevel?: number };
+export type PortraitPromptOptions = { beautyLevel?: number; retouchSettings?: PortraitRetouchSettings };
 
 type PhotographySpec = {
   framing: string;
@@ -32,9 +32,40 @@ function beautyRule(template: PortraitTemplate, value: number) {
   return "美颜强度为明显精修：充分均匀肤色和磨皮提亮、清除明显瑕疵、增强自然皮肤光泽、适度收紧面颊与下颌，但必须保持可识别身份、真实皮肤质感和自然骨骼；不大眼、不改变鼻子嘴唇、不制造塑料皮肤。";
 }
 
+function clamp(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : fallback;
+}
+
+function detailedRetouchRule(template: PortraitTemplate, settings?: PortraitRetouchSettings) {
+  if (!settings) return undefined;
+  if (template.category === "id_photo") return "证件照安全限制覆盖客户设置：磨皮、提亮和祛瑕仅允许轻度；禁止美白改变原始肤色，禁止瘦脸、大眼、鼻型调整和明显妆容，必须保持原始发型与真实身份。";
+  const values = {
+    skinSmoothing: clamp(settings.skinSmoothing, 45),
+    whitening: clamp(settings.whitening, 30),
+    blemishRemoval: clamp(settings.blemishRemoval, 60),
+    faceSlimming: clamp(settings.faceSlimming, 20),
+    eyeEnlargement: clamp(settings.eyeEnlargement, 10),
+    noseRefinement: clamp(settings.noseRefinement, 10),
+    skinGlow: clamp(settings.skinGlow, 45),
+    makeupIntensity: clamp(settings.makeupIntensity, 35),
+  };
+  return [
+    "按以下客户美颜参数分别执行，不得擅自联动放大其他项目：",
+    `磨皮 ${values.skinSmoothing}/100：降低粗糙与细小纹理，但保留足够毛孔和真实皮肤层次。`,
+    `美白 ${values.whitening}/100：提升通透度与明度，保持人物原始肤色倾向，禁止漂白、过曝和脸颈色差。`,
+    `祛瑕 ${values.blemishRemoval}/100：减弱痘印、黑眼圈、泛红和临时瑕疵，保留痣及可识别特征。`,
+    `瘦脸 ${values.faceSlimming}/100：只收紧面颊和下颌软组织，保持颧骨、下颌骨、脸长和头部比例，禁止明显骨骼重塑。`,
+    `大眼 ${values.eyeEnlargement}/100：仅在自然范围轻微放大眼裂和提升精神感，保持眼距、眼型、瞳孔比例和双眼对称。`,
+    `鼻型 ${values.noseRefinement}/100：仅轻微优化鼻翼、鼻梁和鼻尖的视觉精致度，保持原始鼻部识别特征和透视。`,
+    `皮肤光泽 ${values.skinGlow}/100：增加自然水润高光和通透感，禁止油腻反光、金属质感和塑料皮肤。`,
+    `妆容 ${values.makeupIntensity}/100：匹配写真主题添加适度底妆、眉眼、腮红和唇色，保持五官真实，不使用夸张舞台妆。`,
+  ].join("\n");
+}
+
 export function buildPortraitPrompt(template: PortraitTemplate, mode: PortraitPromptMode, options: PortraitPromptOptions = {}) {
   const spec = photographySpec(template);
   const beautyLevel = Math.max(0, Math.min(100, Math.round(options.beautyLevel ?? 55)));
+  const retouchRule = detailedRetouchRule(template, options.retouchSettings) || `美颜参数：${beautyLevel}/100。${beautyRule(template, beautyLevel)}`;
   const identity = mode === "template" ? "图1是指定的基准模特自拍，也是唯一的人物身份来源" : "图1是用户自拍，也是唯一的人物身份来源";
   const appearanceRule = template.category === "id_photo"
     ? "证件照必须原样保留图1人物的脸型、骨骼、五官比例、发型、发际线、头发长度和真实身份；不得瘦脸、改变脸型、改变发型、增加发量、添加明显妆容或制造写真姿势。"
@@ -58,7 +89,7 @@ export function buildPortraitPrompt(template: PortraitTemplate, mode: PortraitPr
     "9. 成片质感：超写实真人摄影，呈现真实皮肤纹理、自然独立发丝、准确人体结构、真实布料材质和符合物理规律的光影；禁止插画、CG、游戏建模、蜡像和塑料皮肤。",
     appearanceRule,
     stylingRule,
-    `美颜参数：${beautyLevel}/100。${beautyRule(template, beautyLevel)}`,
+    retouchRule,
     "头发、脸部、颈部、身体和服装必须属于同一个人，不得创造或融合第二个人物身份；禁止换脸拼贴、双重发型、多余人物、文字、品牌标志和水印。",
     "只输出一张最终写真照片。",
   ].join("\n");

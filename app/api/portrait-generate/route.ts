@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [selfiePart, { text: buildPortraitPrompt(template, "user", { beautyLevel: input.beautyLevel }) }] }],
+        contents: [{ role: "user", parts: [selfiePart, { text: buildPortraitPrompt(template, "user", { beautyLevel: input.beautyLevel, retouchSettings: input.retouchSettings }) }] }],
         generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: template.aspectRatio } },
       }),
       signal: AbortSignal.timeout(285_000),

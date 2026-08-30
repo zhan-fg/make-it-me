@@ -15,6 +15,18 @@ export type PortraitGenerationRequest = {
   templateId: string;
   selfieImageUrl: string;
   beautyLevel?: number;
+  retouchSettings?: PortraitRetouchSettings;
+};
+
+export type PortraitRetouchSettings = {
+  skinSmoothing: number;
+  whitening: number;
+  blemishRemoval: number;
+  faceSlimming: number;
+  eyeEnlargement: number;
+  noseRefinement: number;
+  skinGlow: number;
+  makeupIntensity: number;
 };
 
 export type PortraitGenerationResult = {
