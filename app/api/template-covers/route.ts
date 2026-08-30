@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       if (!current || blob.uploadedAt > current.uploadedAt) latest.set(templateId, blob);
     }
     const covers = Object.fromEntries([...latest].map(([templateId, blob]) => [templateId, signedCoverUrl(request, blob.url, signingSecret)]));
-    return NextResponse.json({ covers }, { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } });
+    return NextResponse.json({ covers }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) {
     console.error("template_cover_list_error", error instanceof Error ? error.message : error);
     return NextResponse.json({ covers: {} });

@@ -51,7 +51,7 @@ export default function Home() {
   const [error, setError] = useState<string>();
   const [publishedCovers, setPublishedCovers] = useState<Record<string, string>>({});
   const input = useRef<HTMLInputElement>(null);
-  useEffect(() => { fetch("/api/template-covers").then((response) => response.json()).then((value) => setPublishedCovers(value.covers || {})).catch(() => undefined); }, []);
+  useEffect(() => { fetch("/api/template-covers", { cache: "no-store" }).then((response) => response.json()).then((value) => setPublishedCovers(value.covers || {})).catch(() => undefined); }, []);
   const clearSelfie = () => { if (selfie) URL.revokeObjectURL(selfie.previewUrl); setSelfie(undefined); };
   const reset = () => { clearSelfie(); setStep("templates"); setTemplate(undefined); setResult(undefined); setError(undefined); };
   const choose = (value: PortraitTemplate) => { clearSelfie(); setTemplate(value); setResult(undefined); setError(undefined); setStep("selfie"); };
