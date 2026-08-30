@@ -12,6 +12,12 @@ function formatBytes(value: number) {
   return value >= 1024 * 1024 ? `${(value / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(value / 1024))}KB`;
 }
 
+async function readApiPayload(response: Response, label: string) {
+  const text = await response.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error(`${label}返回了非 JSON 响应（HTTP ${response.status}），请检查最新 Vercel 部署与函数日志`); }
+}
+
 async function prepareSelfie(file: File): Promise<Selfie> {
   if (!file.type.startsWith("image/")) throw new Error("请选择 JPEG、PNG 或 WebP 图片");
   if (file.size > 12 * 1024 * 1024) throw new Error("自拍图片不能超过 12MB");
@@ -54,11 +60,11 @@ export default function Home() {
     try {
       const uploadStartedAt = performance.now();
       const uploadResponse = await fetch("/api/image-upload", { method: "POST", headers: { "Content-Type": selfie.blob.type }, body: selfie.blob });
-      const uploadPayload = await uploadResponse.json();
+      const uploadPayload = await readApiPayload(uploadResponse, "自拍上传接口");
       if (!uploadResponse.ok) throw new Error(uploadPayload.error || "自拍上传失败");
       const selfieUploadMs = performance.now() - uploadStartedAt;
       const response = await fetch("/api/portrait-generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId: template.id, selfieImageUrl: uploadPayload.url }) });
-      const payload = await response.json();
+      const payload = await readApiPayload(response, "写真生成接口");
       const clientRoundTripMs = performance.now() - requestStartedAt;
       if (!response.ok) throw new Error(`${payload.error || "写真生成失败"}（总耗时 ${(clientRoundTripMs / 1000).toFixed(1)} 秒${payload.requestId ? `，追踪号 ${payload.requestId}` : ""}）`);
       payload.timings = { ...payload.timings, selfieUploadMs: Math.round(selfieUploadMs), clientRoundTripMs: Math.round(clientRoundTripMs) };
