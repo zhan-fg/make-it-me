@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { del, get, put } from "@vercel/blob";
 import { createHmac } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { guardApiRequest } from "@/lib/api-security";
 import { getPortraitTemplate } from "@/services/portrait-templates";
 import type { PortraitGenerationRequest } from "@/services/portrait-types";
@@ -23,30 +21,19 @@ async function imagePartFromBlobUrl(value: unknown, label: string) {
   return { inlineData: { mimeType, data: data.toString("base64") } };
 }
 
-async function templateImagePart(coverImage: string) {
-  const relativePath = coverImage.replace(/^\/+/, "");
-  const absolutePath = path.join(process.cwd(), "public", relativePath.replace(/^templates\//, "templates/"));
-  const publicRoot = path.resolve(process.cwd(), "public");
-  if (!path.resolve(absolutePath).startsWith(`${publicRoot}${path.sep}`)) throw new Error("写真模板路径不正确");
-  const data = await readFile(absolutePath);
-  const extension = path.extname(absolutePath).toLowerCase();
-  const mimeType = extension === ".png" ? "image/png" : extension === ".webp" ? "image/webp" : "image/jpeg";
-  return { inlineData: { mimeType, data: data.toString("base64") } };
-}
-
 function prompt(template: NonNullable<ReturnType<typeof getPortraitTemplate>>) {
   const appearanceRule = template.category === "id_photo"
-    ? "这是证件照任务：必须原样保留图1用户本人的脸型、面部骨骼、五官比例、发型、发际线、头发长度与真实身份，仅按图2规范服装、纯色背景、正面机位、头肩比例与均匀光线；不得瘦脸、改变脸型、改变发型、增加发量、添加明显妆容或制造写真姿势。"
-    : "只继承图2模板的服装设计、妆容方向、发型风格、姿势、构图、景别、机位、灯光、背景与色彩，人物身份必须完全来自图1用户自拍，并根据用户本人自然适配头发和身体比例。";
+    ? "这是证件照任务：必须原样保留图1用户本人的脸型、面部骨骼、五官比例、发型、发际线、头发长度与真实身份，仅按写真方案规范服装、纯色背景、正面机位、头肩比例与均匀光线；不得瘦脸、改变脸型、改变发型、增加发量、添加明显妆容或制造写真姿势。"
+    : "根据写真方案生成服装设计、妆容方向、发型风格、姿势、构图、景别、机位、灯光、背景与色彩，人物身份必须完全来自图1用户自拍，并根据用户本人自然适配头发和身体比例。";
   const retouchRule = template.category === "id_photo"
     ? "证件照只允许轻微磨皮和轻微均匀肤色，保留皮肤纹理、痣、面部轮廓与本人真实特征；不得去除全部皮肤细节，不得美白过度，不得瘦脸、大眼或改变脸型、发型、眼睛、鼻子、嘴唇和表情。"
     : "进行自然商业精修：均匀肤色、去除痘印黑眼圈和泛红、适度磨皮提亮、增加皮肤光泽感、轻微收紧面颊与下颌；保留真实皮肤纹理，不大眼，不改变鼻子嘴唇，不强行露齿。";
   return [
-    "你是一名专业人像摄影与高端商业修图师。图1是必须保留身份的用户本人自拍，图2只是写真风格与构图模板。生成一张全新的、真实摄影质感的竖版写真。",
+    "你是一名专业人像摄影与高端商业修图师。图1是唯一的图片输入和唯一的人物身份来源。根据下方写真方案生成一张全新的、真实摄影质感的竖版写真。",
     `写真方案：${template.prompt}`,
     "成片必须是超写实真人摄影：呈现真实皮肤毛孔与细微纹理、独立自然发丝、准确人体结构、真实布料与材质、符合物理规律的光影和全画幅相机镜头质感；禁止插画感、CG 感、游戏建模感、蜡像感和塑料皮肤。",
-    "最高优先级：最终人物必须能明确识别为图1用户本人，保持其脸型骨骼、五官比例、眼睛、鼻子、嘴唇、耳朵与可识别特征。图2人物只用于展示造型，不得复制图2模特的脸、身份或直接输出模板原图。",
-    "必须重新生成图1用户进入图2场景后的照片；如果人物仍像图2模特而不像图1用户，则结果不合格。",
+    "最高优先级：最终人物必须能明确识别为图1用户本人，保持其脸型骨骼、五官比例、眼睛、鼻子、嘴唇、耳朵与可识别特征。不得创造或融合其他人物身份。",
+    "必须生成图1用户进入写真方案所描述场景后的照片；如果人物不像图1用户本人，则结果不合格。",
     appearanceRule,
     retouchRule,
     "头发、脸部、颈部、身体和服装必须属于同一个人，边缘、光线、阴影、景深与背景自然融合；禁止换脸拼贴、双重发型、塑料皮肤、多余人物、文字、水印。",
@@ -87,7 +74,7 @@ export async function POST(request: Request) {
     const template = getPortraitTemplate(templateId);
     if (!template) return NextResponse.json({ error: "写真模板不存在或已下线" }, { status: 400 });
     const templateLoadStartedAt = performance.now();
-    const [templatePart, selfiePart] = await Promise.all([templateImagePart(template.coverImage), imagePartFromBlobUrl(input.selfieImageUrl, "自拍图片")]);
+    const selfiePart = await imagePartFromBlobUrl(input.selfieImageUrl, "自拍图片");
     templateLoadMs = performance.now() - templateLoadStartedAt;
     if (typeof input.selfieImageUrl === "string") await del(input.selfieImageUrl).catch(() => undefined);
     const geminiStartedAt = performance.now();
@@ -95,7 +82,7 @@ export async function POST(request: Request) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [selfiePart, templatePart, { text: prompt(template) }] }],
+        contents: [{ role: "user", parts: [selfiePart, { text: prompt(template) }] }],
         generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: template.aspectRatio } },
       }),
       signal: AbortSignal.timeout(285_000),
