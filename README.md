@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-复制 `.env.example` 为 `.env.local`。写真主流程需要配置 `GEMINI_API_KEY` 和 Vercel Blob 自动提供的 `BLOB_READ_WRITE_TOKEN`，可通过 `GEMINI_IMAGE_MODEL` 选择图片模型，默认使用 `gemini-3.1-flash-image`。密钥只在服务端读取，不进入浏览器包。
+复制 `.env.example` 为 `.env.local`。写真主流程需要配置 `GEMINI_API_KEY` 并将私有 Vercel Blob Store 连接到项目；Vercel 部署优先通过项目 OIDC 访问 Blob，本地开发可使用 `BLOB_READ_WRITE_TOKEN`。可通过 `GEMINI_IMAGE_MODEL` 选择图片模型，默认使用 `gemini-3.1-flash-image`。密钥只在服务端读取，不进入浏览器包。
 
 ## 写真主流程
 
