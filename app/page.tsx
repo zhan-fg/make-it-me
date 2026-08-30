@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconCheck, IconDownload, IconRefresh, IconSparkles, IconUpload } from "@tabler/icons-react";
 import { portraitTemplates } from "@/services/portrait-templates";
 import type { PortraitGenerationResult, PortraitTemplate } from "@/services/portrait-types";
@@ -49,7 +49,9 @@ export default function Home() {
   const [selfie, setSelfie] = useState<Selfie>();
   const [result, setResult] = useState<PortraitGenerationResult>();
   const [error, setError] = useState<string>();
+  const [publishedCovers, setPublishedCovers] = useState<Record<string, string>>({});
   const input = useRef<HTMLInputElement>(null);
+  useEffect(() => { fetch("/api/template-covers").then((response) => response.json()).then((value) => setPublishedCovers(value.covers || {})).catch(() => undefined); }, []);
   const clearSelfie = () => { if (selfie) URL.revokeObjectURL(selfie.previewUrl); setSelfie(undefined); };
   const reset = () => { clearSelfie(); setStep("templates"); setTemplate(undefined); setResult(undefined); setError(undefined); };
   const choose = (value: PortraitTemplate) => { clearSelfie(); setTemplate(value); setResult(undefined); setError(undefined); setStep("selfie"); };
@@ -74,14 +76,14 @@ export default function Home() {
   return <main className="min-h-screen bg-[#efede9] text-[#211f1d]">
     <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => pick(event.target.files?.[0])}/>
     <header className="mx-auto flex h-20 max-w-6xl items-center px-5"><button onClick={reset} className="flex items-center gap-2 text-lg font-semibold"><span className="grid h-9 w-9 place-items-center rounded-full bg-[#201e1c] text-white"><IconSparkles size={17}/></span>Make it me</button><span className="ml-auto rounded-full bg-white/70 px-3 py-1.5 text-xs">AI 写真内测</span></header>
-    {step === "templates" && <Gallery choose={choose}/>}
+    {step === "templates" && <Gallery choose={choose} publishedCovers={publishedCovers}/>}
     {step === "selfie" && template && <SelfiePage template={template} selfie={selfie} error={error} back={() => setStep("templates")} pick={() => input.current?.click()} generate={generate}/>}
     {step === "generating" && template && <Loading template={template}/>}
     {step === "result" && template && result && <Result template={template} result={result} again={() => setStep("selfie")} reset={reset}/>}
   </main>;
 }
 
-function Gallery({ choose }: { choose: (template: PortraitTemplate) => void }) {
+function Gallery({ choose, publishedCovers }: { choose: (template: PortraitTemplate) => void; publishedCovers: Record<string, string> }) {
   const audienceLabels: Record<PortraitTemplate["audience"], string> = { female: "女性形象", male: "男性形象", unisex: "男女通用" };
   const categories: { id: "all" | PortraitTemplate["category"]; label: string }[] = [
     { id: "all", label: "全部" }, { id: "professional", label: "职场" }, { id: "korean", label: "韩式" },
@@ -92,7 +94,7 @@ function Gallery({ choose }: { choose: (template: PortraitTemplate) => void }) {
   ];
   const [category, setCategory] = useState<(typeof categories)[number]["id"]>("all");
   const visibleTemplates = category === "all" ? portraitTemplates : portraitTemplates.filter((item) => item.category === category);
-  return <div className="mx-auto max-w-6xl px-5 pb-20"><section className="py-10 text-center sm:py-16"><span className="text-xs tracking-[.2em] text-[#806252]">PORTRAIT STUDIO</span><h1 className="mt-4 text-4xl font-semibold tracking-[-.04em] sm:text-6xl">一张自拍，生成你的写真</h1><p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-[#716c67]">从 {portraitTemplates.length} 套原创写真中选择风格。形象标签仅作提示，不限制选择。</p></section><div className="mb-7 flex gap-2 overflow-x-auto pb-2">{categories.map((item) => <button key={item.id} onClick={() => setCategory(item.id)} className={`shrink-0 rounded-full px-4 py-2 text-sm transition ${category === item.id ? "bg-[#201e1c] text-white" : "bg-white text-[#625d58] hover:bg-[#e4dfd9]"}`}>{item.label}</button>)}</div><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{visibleTemplates.map((item) => <button key={item.id} onClick={() => choose(item)} className="group overflow-hidden rounded-[28px] bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl"><div className="relative aspect-[3/4] overflow-hidden"><img src={item.coverImage} alt={item.title} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"/><span className="absolute left-4 top-4 rounded-full bg-black/65 px-3 py-1.5 text-[11px] text-white backdrop-blur">{audienceLabels[item.audience]}</span></div><div className="p-5"><h2 className="text-lg font-semibold">{item.title}</h2><div className="mt-3 flex gap-2">{item.tags.map((tag) => <span key={tag} className="rounded-full bg-[#f3f0ec] px-2.5 py-1 text-[11px]">{tag}</span>)}</div></div></button>)}</div><p className="mt-8 text-center text-xs text-[#8b8580]">模板均为 AI 原创合成人像，不使用网络抓取图片。</p></div>;
+  return <div className="mx-auto max-w-6xl px-5 pb-20"><section className="py-10 text-center sm:py-16"><span className="text-xs tracking-[.2em] text-[#806252]">PORTRAIT STUDIO</span><h1 className="mt-4 text-4xl font-semibold tracking-[-.04em] sm:text-6xl">一张自拍，生成你的写真</h1><p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-[#716c67]">从 {portraitTemplates.length} 套原创写真中选择风格。形象标签仅作提示，不限制选择。</p></section><div className="mb-7 flex gap-2 overflow-x-auto pb-2">{categories.map((item) => <button key={item.id} onClick={() => setCategory(item.id)} className={`shrink-0 rounded-full px-4 py-2 text-sm transition ${category === item.id ? "bg-[#201e1c] text-white" : "bg-white text-[#625d58] hover:bg-[#e4dfd9]"}`}>{item.label}</button>)}</div><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{visibleTemplates.map((item) => { const coverImage = publishedCovers[item.id] || item.coverImage; return <button key={item.id} onClick={() => choose({ ...item, coverImage })} className="group overflow-hidden rounded-[28px] bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl"><div className="relative aspect-[3/4] overflow-hidden"><img src={coverImage} alt={item.title} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"/><span className="absolute left-4 top-4 rounded-full bg-black/65 px-3 py-1.5 text-[11px] text-white backdrop-blur">{audienceLabels[item.audience]}</span></div><div className="p-5"><h2 className="text-lg font-semibold">{item.title}</h2><div className="mt-3 flex gap-2">{item.tags.map((tag) => <span key={tag} className="rounded-full bg-[#f3f0ec] px-2.5 py-1 text-[11px]">{tag}</span>)}</div></div></button>; })}</div><p className="mt-8 text-center text-xs text-[#8b8580]">模板均为 AI 原创合成人像，不使用网络抓取图片。</p></div>;
 }
 
 function SelfiePage({ template, selfie, error, back, pick, generate }: { template: PortraitTemplate; selfie?: Selfie; error?: string; back: () => void; pick: () => void; generate: () => void }) {
@@ -110,4 +112,3 @@ function Result({ template, result, again, reset }: { template: PortraitTemplate
   ] as const;
   return <div className="mx-auto max-w-5xl px-5 pb-20"><div className="py-8 text-center"><span className="text-xs tracking-[.15em] text-[#806252]">PORTRAIT READY</span><h1 className="mt-3 text-4xl font-semibold">这是你的写真</h1><p className="mt-3 text-sm text-[#746e69]">{result.model} · 浏览器总耗时 {((result.timings.clientRoundTripMs || result.elapsedMs) / 1000).toFixed(1)} 秒</p></div><div className="grid gap-5 sm:grid-cols-2"><img src={template.coverImage} alt="写真模板" className="aspect-[3/4] w-full rounded-[28px] object-cover"/><img src={result.imageUrl} alt="生成写真" className="aspect-[3/4] w-full rounded-[28px] bg-white object-cover"/></div><p className="mt-3 flex justify-center gap-2 text-sm"><IconCheck size={16}/>Gemini 真实生成</p><section className="mx-auto mt-6 max-w-2xl rounded-2xl bg-white p-5"><div className="flex items-center justify-between"><h2 className="font-semibold">生成耗时分析</h2><span className="text-xs text-[#807973]">服务端 {(result.timings.serverTotalMs / 1000).toFixed(1)} 秒</span></div><div className="mt-4 grid gap-3 sm:grid-cols-5">{timingItems.map(([label, value]) => <div key={label} className="rounded-xl bg-[#f5f2ee] p-3"><p className="text-[11px] text-[#7e7771]">{label}</p><p className="mt-1 font-semibold">{value < 1000 ? `${Math.round(value)} ms` : `${(value / 1000).toFixed(1)} s`}</p></div>)}</div>{result.requestId && <p className="mt-3 text-[11px] text-[#918a84]">追踪号：{result.requestId}</p>}</section><div className="mt-7 flex flex-wrap justify-center gap-3"><a href={result.imageUrl} download={`make-it-me-${template.id}.png`} className="flex items-center gap-2 rounded-full bg-[#201e1c] px-5 py-3 text-sm text-white"><IconDownload size={17}/>保存写真</a><button onClick={again} className="rounded-full bg-white px-5 py-3 text-sm">重新生成</button><button onClick={reset} className="rounded-full bg-white px-5 py-3 text-sm">其他模板</button></div></div>;
 }
-

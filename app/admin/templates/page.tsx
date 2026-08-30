@@ -1,0 +1,111 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { IconCheck, IconRefresh, IconSparkles, IconUpload } from "@tabler/icons-react";
+import { portraitTemplates } from "@/services/portrait-templates";
+
+type Draft = {
+  templateId: string;
+  title?: string;
+  status: "success" | "error";
+  imageUrl?: string;
+  blobUrl?: string;
+  prompt?: string;
+  elapsedMs?: number;
+  error?: string;
+  published?: boolean;
+};
+
+async function payload(response: Response) {
+  const text = await response.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error(`服务返回异常（HTTP ${response.status}）`); }
+}
+
+export default function TemplateAdminPage() {
+  const [secret, setSecret] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const toggle = (templateId: string) => setSelected((current) => current.includes(templateId) ? current.filter((id) => id !== templateId) : [...current, templateId]);
+  const requestDrafts = async (templateIds: string[]) => {
+    if (!secret) throw new Error("请先输入管理员密钥");
+    const response = await fetch("/api/admin/template-previews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ templateIds, confirm: "GENERATE_TEMPLATE_PREVIEWS" }),
+    });
+    const result = await payload(response);
+    if (!response.ok) throw new Error(result.error || "模板生成失败");
+    setDrafts((current) => ({ ...current, ...Object.fromEntries((result.results as Draft[]).map((draft) => [draft.templateId, draft])) }));
+  };
+  const generate = async () => {
+    if (!selected.length) return setMessage("请至少选择一个模板");
+    setBusy(true); setMessage(`准备生成 ${selected.length} 个模板，请保持页面开启。`);
+    try {
+      for (let index = 0; index < selected.length; index += 5) {
+        const batch = selected.slice(index, index + 5);
+        setMessage(`正在生成第 ${index + 1}–${Math.min(index + 5, selected.length)} 个，共 ${selected.length} 个。`);
+        await requestDrafts(batch);
+      }
+      setMessage("全部生成任务已完成，请逐张审核。生成失败的模板可以单独重试。");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "模板生成失败"); }
+    finally { setBusy(false); }
+  };
+  const regenerate = async (templateId: string) => {
+    setBusy(true); setMessage("正在重新生成模板……");
+    try { await requestDrafts([templateId]); setMessage("重新生成完成，请审核新草稿。"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "重新生成失败"); }
+    finally { setBusy(false); }
+  };
+  const publish = async (draft: Draft) => {
+    if (!secret || !draft.blobUrl) return;
+    setBusy(true); setMessage(`正在发布「${draft.title || draft.templateId}」……`);
+    try {
+      const response = await fetch("/api/admin/template-previews", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+        body: JSON.stringify({ templateId: draft.templateId, blobUrl: draft.blobUrl, confirm: "PUBLISH_TEMPLATE_PREVIEW" }),
+      });
+      const result = await payload(response);
+      if (!response.ok) throw new Error(result.error || "模板发布失败");
+      setDrafts((current) => ({ ...current, [draft.templateId]: { ...current[draft.templateId], published: true } }));
+      setMessage("发布成功，首页将在几分钟内使用新封面。");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "模板发布失败"); }
+    finally { setBusy(false); }
+  };
+
+  return <main className="min-h-screen bg-[#efede9] px-5 py-10 text-[#211f1d]">
+    <div className="mx-auto max-w-7xl">
+      <header className="flex flex-col gap-5 rounded-[28px] bg-white p-6 sm:flex-row sm:items-end sm:justify-between">
+        <div><span className="text-xs tracking-[.18em] text-[#806252]">TEMPLATE ADMIN</span><h1 className="mt-2 text-3xl font-semibold">Gemini 写真模板工作台</h1><p className="mt-2 text-sm text-[#746e69]">批量生成草稿、在线审核并发布。密钥只保存在当前页面内存，不会写入浏览器存储。</p></div>
+        <label className="w-full max-w-md text-xs text-[#746e69]">管理员密钥<input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} autoComplete="off" className="mt-2 w-full rounded-2xl border bg-[#faf9f7] px-4 py-3 text-sm outline-none focus:border-[#806252]"/></label>
+      </header>
+      <div className="sticky top-3 z-10 mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-[#201e1c]/95 p-4 text-white shadow-xl backdrop-blur">
+        <button onClick={() => setSelected(selected.length === portraitTemplates.length ? [] : portraitTemplates.map((item) => item.id))} className="rounded-full bg-white/15 px-4 py-2 text-sm">{selected.length === portraitTemplates.length ? "取消全选" : "选择全部"}</button>
+        <span className="text-sm">已选择 {selected.length} / {portraitTemplates.length}</span>
+        <button disabled={busy || !selected.length || !secret} onClick={generate} className="ml-auto flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-[#201e1c] disabled:opacity-40"><IconSparkles size={17}/>{busy ? "处理中" : "批量生成"}</button>
+      </div>
+      {message && <p className="mt-4 rounded-2xl bg-[#fff8dc] px-4 py-3 text-sm text-[#705d23]">{message}</p>}
+      <section className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {portraitTemplates.map((template) => {
+          const draft = drafts[template.id];
+          return <article key={template.id} className={`overflow-hidden rounded-[24px] bg-white shadow-sm ${selectedSet.has(template.id) ? "ring-2 ring-[#806252]" : ""}`}>
+            <button onClick={() => toggle(template.id)} className="relative block aspect-[3/4] w-full overflow-hidden text-left">
+              <img src={draft?.imageUrl || template.coverImage} alt={template.title} className="h-full w-full object-cover"/>
+              <span className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full ${selectedSet.has(template.id) ? "bg-[#201e1c] text-white" : "bg-white/85"}`}>{selectedSet.has(template.id) && <IconCheck size={17}/>}</span>
+              {draft?.published && <span className="absolute bottom-3 left-3 rounded-full bg-[#37754a] px-3 py-1.5 text-xs text-white">已发布</span>}
+            </button>
+            <div className="p-4"><h2 className="font-semibold">{template.title}</h2><p className="mt-1 text-xs text-[#827b75]">{template.id}{draft?.elapsedMs ? ` · ${(draft.elapsedMs / 1000).toFixed(1)} 秒` : ""}</p>
+              {draft?.status === "error" && <p className="mt-3 rounded-xl bg-[#fff0ed] p-3 text-xs text-[#963b31]">{draft.error}</p>}
+              {draft?.status === "success" && <div className="mt-4 flex gap-2"><button disabled={busy} onClick={() => regenerate(template.id)} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f1eeea] py-2.5 text-xs"><IconRefresh size={15}/>重新生成</button><button disabled={busy || draft.published} onClick={() => publish(draft)} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#201e1c] py-2.5 text-xs text-white disabled:opacity-40"><IconUpload size={15}/>{draft.published ? "已发布" : "发布"}</button></div>}
+            </div>
+          </article>;
+        })}
+      </section>
+    </div>
+  </main>;
+}

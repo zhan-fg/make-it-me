@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { del, get, list, put } from "@vercel/blob";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getPortraitTemplate } from "@/services/portrait-templates";
@@ -100,5 +100,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ model, draftsOnly: true, expiresInHours: 24, results });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "模板生成请求失败" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  const adminSecret = process.env.TEMPLATE_ADMIN_SECRET;
+  if (!adminSecret) return NextResponse.json({ error: "服务端尚未配置 TEMPLATE_ADMIN_SECRET" }, { status: 503 });
+  if (!authorized(request, adminSecret)) return NextResponse.json({ error: "无权发布模板" }, { status: 401 });
+
+  try {
+    const input = await request.json() as { templateId?: unknown; blobUrl?: unknown; confirm?: unknown };
+    const templateId = typeof input.templateId === "string" ? input.templateId : "";
+    const template = getPortraitTemplate(templateId);
+    if (!template) return NextResponse.json({ error: "模板不存在" }, { status: 400 });
+    if (input.confirm !== "PUBLISH_TEMPLATE_PREVIEW") return NextResponse.json({ error: "缺少发布确认" }, { status: 400 });
+    if (typeof input.blobUrl !== "string") return NextResponse.json({ error: "草稿地址无效" }, { status: 400 });
+    const sourceUrl = new URL(input.blobUrl);
+    const expectedPrefix = `/template-preview-drafts/${templateId}/`;
+    if (sourceUrl.protocol !== "https:" || !sourceUrl.hostname.endsWith(".private.blob.vercel-storage.com") || !decodeURIComponent(sourceUrl.pathname).startsWith(expectedPrefix)) {
+      return NextResponse.json({ error: "只能发布该模板自己的私有草稿" }, { status: 400 });
+    }
+    const source = await get(sourceUrl.toString(), { access: "private", abortSignal: AbortSignal.timeout(20_000) });
+    if (!source || source.statusCode !== 200) return NextResponse.json({ error: "草稿图片不存在或已失效" }, { status: 404 });
+    const mimeType = source.blob.contentType?.split(";")[0] || "image/jpeg";
+    const extension = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+    const image = Buffer.from(await new Response(source.stream).arrayBuffer());
+    const published = await put(`template-published/${templateId}/${Date.now()}-${crypto.randomUUID()}.${extension}`, image, {
+      access: "private",
+      addRandomSuffix: true,
+      contentType: mimeType,
+    });
+    const previous = await list({ prefix: `template-published/${templateId}/`, limit: 100 });
+    const obsolete = previous.blobs.filter((blob) => blob.url !== published.url).map((blob) => blob.url);
+    if (obsolete.length) await del(obsolete).catch(() => undefined);
+    console.info("template_preview_published", JSON.stringify({ templateId, blobUrl: published.url }));
+    return NextResponse.json({ templateId, status: "published", publishedAt: new Date().toISOString() });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "模板发布失败" }, { status: 500 });
   }
 }

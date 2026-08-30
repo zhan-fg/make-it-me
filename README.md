@@ -32,7 +32,8 @@ npm run dev
 - 接口只在服务端读取 `GEMINI_API_KEY`，并要求独立的 `TEMPLATE_ADMIN_SECRET` Bearer Token
 - 每次最多生成 5 个模板，且请求体必须包含 `confirm: "GENERATE_TEMPLATE_PREVIEWS"`，避免误调用产生费用
 - 草稿写入私有 Vercel Blob，不会自动覆盖正式模板；返回的审核链接有效期为 24 小时
-- 审核通过后再将选中的图片加入 `public/templates` 并更新对应 `coverImage`，未通过的草稿无需发布
+- `/admin/templates` 提供管理员工作台，可选择全部模板、每批 5 张连续生成、在线审核、重新生成和发布
+- 发布后的正式封面保存在私有 Blob；首页通过 `/api/template-covers` 一次读取封面映射，未发布模板自动回退到 `public/templates`
 
 远程 VLM 与图片生成不再要求体验访问码。公开部署仍通过服务端请求频率限制和图片大小限制控制滥用，图片生成继续使用现有 `AI_PROVIDER` 配置。
 
