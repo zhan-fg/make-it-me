@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { del, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -14,11 +14,11 @@ async function imagePartFromBlobUrl(value: unknown, label: string) {
   if (typeof value !== "string") throw new Error(`${label}地址格式不正确`);
   const url = new URL(value);
   if (url.protocol !== "https:" || !url.hostname.endsWith(".private.blob.vercel-storage.com")) throw new Error(`${label}必须来自本应用的私有图片存储`);
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` }, signal: AbortSignal.timeout(20_000) });
-  if (!response.ok) throw new Error(`${label}读取失败（HTTP ${response.status}）`);
-  const mimeType = response.headers.get("content-type")?.split(";")[0].toLowerCase();
+  const blob = await get(url.toString(), { access: "private", abortSignal: AbortSignal.timeout(20_000) });
+  if (!blob || blob.statusCode !== 200) throw new Error(`${label}读取失败`);
+  const mimeType = blob.blob.contentType?.split(";")[0].toLowerCase();
   if (!mimeType || !["image/jpeg", "image/png", "image/webp"].includes(mimeType)) throw new Error(`${label}必须是 JPEG、PNG 或 WebP 图片`);
-  const data = Buffer.from(await response.arrayBuffer());
+  const data = Buffer.from(await new Response(blob.stream).arrayBuffer());
   if (data.byteLength > 2_200_000) throw new Error(`${label}超过上传限制`);
   return { inlineData: { mimeType, data: data.toString("base64") } };
 }
@@ -53,10 +53,10 @@ function prompt(template: NonNullable<ReturnType<typeof getPortraitTemplate>>) {
   ].join("\n");
 }
 
-function signedResultUrl(request: Request, blobUrl: string) {
+function signedResultUrl(request: Request, blobUrl: string, secret: string) {
   const expires = Date.now() + 60 * 60 * 1000;
   const value = `${blobUrl}\n${expires}`;
-  const signature = createHmac("sha256", process.env.BLOB_READ_WRITE_TOKEN!).update(value).digest("hex");
+  const signature = createHmac("sha256", secret).update(value).digest("hex");
   const url = new URL("/api/portrait-image", request.url);
   url.searchParams.set("url", blobUrl);
   url.searchParams.set("expires", String(expires));
@@ -79,7 +79,6 @@ export async function POST(request: Request) {
     if (guard) return NextResponse.json({ error: guard.error }, { status: guard.status });
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "服务端尚未配置 GEMINI_API_KEY" }, { status: 503 });
-    if (!process.env.BLOB_READ_WRITE_TOKEN) return NextResponse.json({ error: "服务端尚未配置 BLOB_READ_WRITE_TOKEN" }, { status: 503 });
     const requestParseStartedAt = performance.now();
     const input = await request.json() as Partial<PortraitGenerationRequest>;
     requestParseMs = performance.now() - requestParseStartedAt;
@@ -119,7 +118,7 @@ export async function POST(request: Request) {
     console.info("portrait_generation_timing", JSON.stringify({ requestId, providerRequestId, templateId, model, status: "success", ...timings }));
     return NextResponse.json({
       id: `portrait-${Date.now()}`,
-      imageUrl: signedResultUrl(request, generatedImage.url),
+      imageUrl: signedResultUrl(request, generatedImage.url, apiKey),
       provider: "gemini",
       model,
       elapsedMs: Math.round(serverTotalMs),
