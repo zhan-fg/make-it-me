@@ -73,7 +73,6 @@ export const portraitTemplates: PortraitTemplate[] = [
     category: "art",
     audience: "unisex",
     coverImage: "/templates/mono-art.jpg",
-    identityNeutralImage: "/templates/identity-neutral/mono-art.jpg",
     prompt: "博物馆级黑白艺术肖像，极简黑色高领服装，胸像三分之二侧脸构图，雕塑感伦勃朗光，丰富灰阶与真实皮肤纹理，沉静中性表情。",
     selfieRequirements: ["面部轮廓清晰", "正面或轻微侧脸", "不要佩戴遮脸饰品"],
     tags: ["黑白", "艺术", "光影"], aspectRatio: "3:4",
@@ -96,7 +95,6 @@ export const portraitTemplates: PortraitTemplate[] = [
     category: "mens",
     audience: "male",
     coverImage: "/templates/mens-business.jpg",
-    identityNeutralImage: "/templates/identity-neutral/mens-business.jpg",
     prompt: "高级男士商务肖像，海军蓝西装与白衬衫，现代深灰摄影棚，腰部以上自然站姿，专业柔和主光，真实皮肤质感，自信友好的闭嘴表情。",
     selfieRequirements: ["正面清晰单人自拍", "额头和下颌完整", "自然闭嘴表情"],
     tags: ["男士", "商务", "专业"], aspectRatio: "3:4",
@@ -141,7 +139,6 @@ export const portraitTemplates: PortraitTemplate[] = [
     category: "mens",
     audience: "male",
     coverImage: "/templates/mens-ink.jpg",
-    identityNeutralImage: "/templates/identity-neutral/mens-ink.jpg",
     prompt: "现代东方水墨感男士写真，深色立领外套，浅色肌理背景与克制水墨氛围，腰部以上三分之二侧身姿态，柔和定向光，沉稳中性表情。",
     selfieRequirements: ["清晰正脸或轻微侧脸", "五官无遮挡", "自然中性表情"],
     tags: ["男士", "东方", "水墨"], aspectRatio: "3:4",
@@ -504,4 +501,3 @@ export const portraitTemplates: PortraitTemplate[] = [
 export function getPortraitTemplate(id: string) {
   return portraitTemplates.find((template) => template.id === id);
 }
-
