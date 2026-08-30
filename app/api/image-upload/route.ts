@@ -11,7 +11,6 @@ export async function POST(request: Request) {
   try {
     const guard = guardApiRequest(request, "image-upload");
     if (guard) return NextResponse.json({ error: guard.error }, { status: guard.status });
-    if (!process.env.BLOB_READ_WRITE_TOKEN) return NextResponse.json({ error: "服务端尚未配置 Vercel Blob" }, { status: 503 });
     const contentType = request.headers.get("content-type")?.split(";")[0] || "";
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (!allowedTypes.has(contentType)) return NextResponse.json({ error: "仅支持 JPEG、PNG 或 WebP 图片" }, { status: 415 });
