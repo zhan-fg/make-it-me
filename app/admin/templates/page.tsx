@@ -15,6 +15,7 @@ type Draft = {
   error?: string;
   published?: boolean;
   baselineGender?: "female" | "male";
+  beautyLevel?: number;
 };
 
 async function payload(response: Response) {
@@ -28,6 +29,7 @@ export default function TemplateAdminPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [baselineGender, setBaselineGender] = useState<"auto" | "female" | "male">("auto");
+  const [beautyLevel, setBeautyLevel] = useState(55);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const selectedSet = useMemo(() => new Set(selected), [selected]);
@@ -38,7 +40,7 @@ export default function TemplateAdminPage() {
     const response = await fetch("/api/admin/template-previews", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
-      body: JSON.stringify({ templateIds, baselineGender: baselineGender === "auto" ? undefined : baselineGender, confirm: "GENERATE_TEMPLATE_PREVIEWS" }),
+      body: JSON.stringify({ templateIds, baselineGender: baselineGender === "auto" ? undefined : baselineGender, beautyLevel, confirm: "GENERATE_TEMPLATE_PREVIEWS" }),
     });
     const result = await payload(response);
     if (!response.ok) throw new Error(result.error || "模板生成失败");
@@ -90,6 +92,7 @@ export default function TemplateAdminPage() {
         <button onClick={() => setSelected(selected.length === portraitTemplates.length ? [] : portraitTemplates.map((item) => item.id))} className="rounded-full bg-white/15 px-4 py-2 text-sm">{selected.length === portraitTemplates.length ? "取消全选" : "选择全部"}</button>
         <span className="text-sm">已选择 {selected.length} / {portraitTemplates.length}</span>
         <label className="flex items-center gap-2 text-sm">基准模特<select value={baselineGender} onChange={(event) => setBaselineGender(event.target.value as "auto" | "female" | "male")} className="rounded-full bg-white/15 px-3 py-2 outline-none"><option className="text-black" value="auto">按模板自动</option><option className="text-black" value="female">固定女模</option><option className="text-black" value="male">固定男模</option></select></label>
+        <label className="flex min-w-52 items-center gap-2 text-sm"><span>美颜 {beautyLevel}</span><input type="range" min="0" max="100" step="5" value={beautyLevel} onChange={(event) => setBeautyLevel(Number(event.target.value))} className="w-28 accent-white"/></label>
         <button disabled={busy || !selected.length || !secret} onClick={generate} className="ml-auto flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-[#201e1c] disabled:opacity-40"><IconSparkles size={17}/>{busy ? "处理中" : "批量生成"}</button>
       </div>
       {message && <p className="mt-4 rounded-2xl bg-[#fff8dc] px-4 py-3 text-sm text-[#705d23]">{message}</p>}
@@ -102,7 +105,7 @@ export default function TemplateAdminPage() {
               <span className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full ${selectedSet.has(template.id) ? "bg-[#201e1c] text-white" : "bg-white/85"}`}>{selectedSet.has(template.id) && <IconCheck size={17}/>}</span>
               {draft?.published && <span className="absolute bottom-3 left-3 rounded-full bg-[#37754a] px-3 py-1.5 text-xs text-white">已发布</span>}
             </button>
-            <div className="p-4"><h2 className="font-semibold">{template.title}</h2><p className="mt-1 text-xs text-[#827b75]">{template.id}{draft?.baselineGender ? ` · ${draft.baselineGender === "female" ? "女模" : "男模"}` : ""}{draft?.elapsedMs ? ` · ${(draft.elapsedMs / 1000).toFixed(1)} 秒` : ""}</p>
+            <div className="p-4"><h2 className="font-semibold">{template.title}</h2><p className="mt-1 text-xs text-[#827b75]">{template.id}{draft?.baselineGender ? ` · ${draft.baselineGender === "female" ? "女模" : "男模"}` : ""}{typeof draft?.beautyLevel === "number" ? ` · 美颜 ${draft.beautyLevel}` : ""}{draft?.elapsedMs ? ` · ${(draft.elapsedMs / 1000).toFixed(1)} 秒` : ""}</p>
               {draft?.status === "error" && <p className="mt-3 rounded-xl bg-[#fff0ed] p-3 text-xs text-[#963b31]">{draft.error}</p>}
               {draft?.status === "success" && <div className="mt-4 flex gap-2"><button disabled={busy} onClick={() => regenerate(template.id)} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f1eeea] py-2.5 text-xs"><IconRefresh size={15}/>重新生成</button><button disabled={busy || draft.published} onClick={() => publish(draft)} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#201e1c] py-2.5 text-xs text-white disabled:opacity-40"><IconUpload size={15}/>{draft.published ? "已发布" : "发布"}</button></div>}
             </div>

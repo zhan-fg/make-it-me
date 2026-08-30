@@ -14,6 +14,7 @@ export type PortraitTemplate = {
 export type PortraitGenerationRequest = {
   templateId: string;
   selfieImageUrl: string;
+  beautyLevel?: number;
 };
 
 export type PortraitGenerationResult = {
