@@ -5,6 +5,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import { buildPortraitPrompt } from "@/services/portrait-prompt";
 import { getPortraitTemplate } from "@/services/portrait-templates";
+import type { PortraitRetouchSettings } from "@/services/portrait-types";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "服务端尚未配置 GEMINI_API_KEY" }, { status: 503 });
 
   try {
-    const input = await request.json() as { templateIds?: unknown; confirm?: unknown; baselineGender?: unknown; beautyLevel?: unknown };
+    const input = await request.json() as { templateIds?: unknown; confirm?: unknown; baselineGender?: unknown; retouchSettings?: unknown };
     if (input.confirm !== confirmation) return NextResponse.json({ error: `请传入 confirm: ${confirmation}` }, { status: 400 });
     if (!Array.isArray(input.templateIds)) return NextResponse.json({ error: "templateIds 必须是数组" }, { status: 400 });
     const templateIds = [...new Set(input.templateIds.filter((value): value is string => typeof value === "string"))];
@@ -59,9 +60,9 @@ export async function POST(request: Request) {
       try {
         const forcedGender = input.baselineGender === "female" || input.baselineGender === "male" ? input.baselineGender : undefined;
         const baselineGender = forcedGender || (template.audience === "male" ? "male" : "female");
-        const beautyLevel = typeof input.beautyLevel === "number" ? Math.max(0, Math.min(100, Math.round(input.beautyLevel))) : 55;
+        const retouchSettings = input.retouchSettings && typeof input.retouchSettings === "object" ? input.retouchSettings as PortraitRetouchSettings : undefined;
         const baselinePart = await baselineModelPart(baselineGender);
-        const generationPrompt = buildPortraitPrompt(template, "template", { beautyLevel });
+        const generationPrompt = buildPortraitPrompt(template, "template", { retouchSettings });
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
           imageUrl: signedPreviewUrl(request, blob.url, apiKey),
           blobUrl: blob.url,
           baselineGender,
-          beautyLevel: template.category === "id_photo" ? 20 : beautyLevel,
+          retouchSettings,
           model,
           prompt: generationPrompt,
           elapsedMs: Math.round(performance.now() - startedAt),
