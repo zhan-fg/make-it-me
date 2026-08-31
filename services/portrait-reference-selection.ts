@@ -33,5 +33,6 @@ export function baselineImagePath(gender: BaselineGender, view: BaselineView) {
 export function normalizeBaselineViews(value: unknown, fallback: BaselineView[]): BaselineView[] {
   if (!Array.isArray(value)) return fallback;
   const selected = value.filter((item): item is BaselineView => typeof item === "string" && allBaselineViews.includes(item as BaselineView));
-  return ["front", ...selected.filter((item) => item !== "front")].slice(0, 3);
+  const normalized: BaselineView[] = ["front", ...selected.filter((item) => item !== "front")];
+  return normalized.slice(0, 3);
 }
