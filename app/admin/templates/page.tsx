@@ -18,6 +18,7 @@ type Draft = {
   error?: string;
   published?: boolean;
   baselineGender?: "female" | "male";
+  baselineViews?: string[];
   retouchSettings?: PortraitRetouchSettings;
 };
 
@@ -108,7 +109,7 @@ export default function TemplateAdminPage() {
               <span className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full ${selectedSet.has(template.id) ? "bg-[#201e1c] text-white" : "bg-white/85"}`}>{selectedSet.has(template.id) && <IconCheck size={17}/>}</span>
               {draft?.published && <span className="absolute bottom-3 left-3 rounded-full bg-[#37754a] px-3 py-1.5 text-xs text-white">已发布</span>}
             </button>
-            <div className="p-4"><h2 className="font-semibold">{template.title}</h2><p className="mt-1 text-xs text-[#827b75]">{template.id}{draft?.baselineGender ? ` · ${draft.baselineGender === "female" ? "女模" : "男模"}` : ""}{draft?.retouchSettings ? " · 自定义美颜" : ""}{draft?.elapsedMs ? ` · ${(draft.elapsedMs / 1000).toFixed(1)} 秒` : ""}</p>
+            <div className="p-4"><h2 className="font-semibold">{template.title}</h2><p className="mt-1 text-xs text-[#827b75]">{template.id}{draft?.baselineGender ? ` · ${draft.baselineGender === "female" ? "女模" : "男模"}` : ""}{draft?.baselineViews?.length ? ` · ${draft.baselineViews.join("+")}` : ""}{draft?.retouchSettings ? " · 自定义美颜" : ""}{draft?.elapsedMs ? ` · ${(draft.elapsedMs / 1000).toFixed(1)} 秒` : ""}</p>
               {draft?.status === "error" && <p className="mt-3 rounded-xl bg-[#fff0ed] p-3 text-xs text-[#963b31]">{draft.error}</p>}
               {draft?.status === "success" && <div className="mt-4 flex gap-2"><button disabled={busy} onClick={() => regenerate(template.id)} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f1eeea] py-2.5 text-xs"><IconRefresh size={15}/>重新生成</button><button disabled={busy || draft.published} onClick={() => publish(draft)} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#201e1c] py-2.5 text-xs text-white disabled:opacity-40"><IconUpload size={15}/>{draft.published ? "已发布" : "发布"}</button></div>}
             </div>

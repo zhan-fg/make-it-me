@@ -1,7 +1,7 @@
 import type { PortraitRetouchSettings, PortraitTemplate } from "./portrait-types";
 
 export type PortraitPromptMode = "template" | "user";
-export type PortraitPromptOptions = { beautyLevel?: number; retouchSettings?: PortraitRetouchSettings };
+export type PortraitPromptOptions = { beautyLevel?: number; retouchSettings?: PortraitRetouchSettings; identityReferenceCount?: number };
 
 type PhotographySpec = {
   framing: string;
@@ -10,6 +10,8 @@ type PhotographySpec = {
   orientation: string;
   camera: string;
   lighting: string;
+  pose: string;
+  editorialStyle: string;
 };
 
 function photographySpec(template: PortraitTemplate): PhotographySpec {
@@ -17,11 +19,13 @@ function photographySpec(template: PortraitTemplate): PhotographySpec {
   const isIdPhoto = template.category === "id_photo";
   const framing = isIdPhoto ? "标准头肩证件照" : description.includes("全身") ? "全身或三分之二全身" : description.includes("三分之二") ? "三分之二全身" : description.includes("腰部以上") ? "腰部以上半身" : description.includes("胸像") ? "胸像" : "腰部以上至三分之二全身";
   const subjectScale = isIdPhoto ? "头顶至肩部占画面高度 58%–68%" : framing.includes("全身") ? "人物占画面高度 82%–90%，完整保留头顶和脚部" : framing === "胸像" ? "人物占画面高度 60%–70%" : framing.includes("腰部以上") ? "人物占画面高度 68%–78%" : "人物占画面高度 74%–86%";
-  const placement = isIdPhoto ? "人物严格水平居中，双眼位于画面上方约 38%，头顶留白 7%–10%，双肩左右安全边距一致" : description.includes("偏心") ? "允许按写真方案偏离中心，但面部必须位于三分法视觉交点，视线方向保留空间，人物不得贴边" : "人物视觉中心位于画面水平中线附近，头顶留白 6%–10%，身体和四肢不得被画框错误截断";
+  const placement = isIdPhoto ? "人物严格水平居中，双眼位于画面上方约 38%，头顶留白 7%–10%，双肩左右安全边距一致" : "优先使用三分法、对角线或环境式构图，人物面部位于视觉交点附近；根据视线和身体朝向保留空间，允许自然偏心，禁止标准证件照式正中对称构图";
   const orientation = isIdPhoto ? "身体、肩线和脸部正对镜头，头部保持垂直，双眼直视镜头" : description.includes("回眸") ? "身体按写真方案转向，脸部自然回看镜头，颈部不得扭曲" : description.includes("侧脸") || description.includes("侧身") ? "身体与脸部按写真方案形成自然侧向角度，双肩透视和视线方向一致" : "身体方向、脸部方向和视线必须协调，肩颈放松，禁止不自然歪头和关节扭曲";
   const camera = isIdPhoto ? "相机与双眼等高，水平拍摄，使用约 85mm 人像镜头视角，禁止广角透视和俯仰畸变" : framing.includes("全身") ? "相机位于胸口至腰部高度，使用约 50–70mm 视角，保持垂直线和人体比例自然" : "相机位于眼睛至胸口高度，使用约 70–105mm 人像视角，保持自然透视与适度背景压缩";
   const lighting = isIdPhoto ? "正面大型柔光，面部照度均匀，背景纯净，左右亮度平衡，无明显鼻影、眼窝阴影和背景阴影" : "严格遵循写真方案的主光方向和色温；主光、环境光、轮廓光必须符合同一空间关系，面部与身体曝光一致，人物投影方向与背景一致";
-  return { framing, subjectScale, placement, orientation, camera, lighting };
+  const pose = isIdPhoto ? "正面平肩、身体稳定、双手不入镜" : description.includes("行走") ? "捕捉自然迈步瞬间，前后脚形成层次，手臂随步态自然摆动，衣摆和头发有轻微动态" : description.includes("坐姿") ? "身体斜向画面坐下，双肩形成自然高低差，手部与座椅、衣料或随身物自然互动，禁止双手僵硬并排" : description.includes("回眸") ? "身体先转离镜头，再由肩颈带动自然回眸，肩线、腰线和视线形成连续方向" : description.includes("侧身") || description.includes("侧脸") ? "身体与镜头形成约 30–60 度夹角，一侧肩膀更靠近镜头，重心落在一侧，手部自然参与造型" : "身体与镜头形成约 15–45 度夹角，肩线避免水平对称，重心自然落在一侧；至少一只手与服装、头发、椅背或场景物件产生自然互动";
+  const editorialStyle = isIdPhoto ? "规范、克制、可用于正式证件" : description.includes("电影") || description.includes("港风") ? "电影剧照式叙事瞬间，画面应有动作发生前后的感觉，不看起来像棚拍登记照" : description.includes("旅拍") || description.includes("海边") || description.includes("草原") || description.includes("都市") ? "环境人像与旅行杂志语言，人物和场景共同叙事，保留足够环境空间与自然动态" : description.includes("杂志") || description.includes("礼服") ? "高端时装杂志大片语言，姿态有设计感但不僵硬，构图具有视觉张力" : "专业写真摄影语言，采用自然瞬间、非对称姿态和有层次的环境关系，禁止证件照、员工头像或普通登记照观感";
+  return { framing, subjectScale, placement, orientation, camera, lighting, pose, editorialStyle };
 }
 
 function beautyRule(template: PortraitTemplate, value: number) {
@@ -66,7 +70,10 @@ export function buildPortraitPrompt(template: PortraitTemplate, mode: PortraitPr
   const spec = photographySpec(template);
   const beautyLevel = Math.max(0, Math.min(100, Math.round(options.beautyLevel ?? 55)));
   const retouchRule = detailedRetouchRule(template, options.retouchSettings) || `美颜参数：${beautyLevel}/100。${beautyRule(template, beautyLevel)}`;
-  const identity = mode === "template" ? "图1是指定的基准模特自拍，也是唯一的人物身份来源" : "图1是用户自拍，也是唯一的人物身份来源";
+  const referenceCount = Math.max(1, Math.round(options.identityReferenceCount || 1));
+  const identity = mode === "template" && referenceCount > 1
+    ? `输入的 ${referenceCount} 张照片均为同一个指定基准模特的不同角度或景别，只能共同用于还原同一个人物身份、脸部结构和身体比例，不得把各图融合成不同人物`
+    : mode === "template" ? "图1是指定的基准模特自拍，也是唯一的人物身份来源" : "图1是用户自拍，也是唯一的人物身份来源";
   const appearanceRule = template.category === "id_photo"
     ? "证件照必须原样保留图1人物的脸型、骨骼、五官比例、发型、发际线、头发长度和真实身份；不得瘦脸、改变脸型、改变发型、增加发量、添加明显妆容或制造写真姿势。"
     : "根据写真方案生成服装、妆容方向、发型风格和姿势；人物身份必须完全来自图1，并根据该人物自然适配头发、肩颈和身体比例。";
@@ -85,8 +92,9 @@ export function buildPortraitPrompt(template: PortraitTemplate, mode: PortraitPr
     `5. 相机与镜头：${spec.camera}。`,
     `6. 灯光：${spec.lighting}。`,
     "7. 环境融合：人物与背景的曝光、白平衡、色温、光源方向、接触阴影、空气透视、锐度和景深必须统一，禁止人物像后期贴入背景。",
-    "8. 姿势：肩颈放松，重心稳定，手臂和手指自然；禁止多余肢体、关节反折、手脚缺失、裁切关节和不符合重力的动作。",
-    "9. 成片质感：超写实真人摄影，呈现真实皮肤纹理、自然独立发丝、准确人体结构、真实布料材质和符合物理规律的光影；禁止插画、CG、游戏建模、蜡像和塑料皮肤。",
+    `8. 姿势与互动：${spec.pose}；肩颈放松，手指自然，禁止多余肢体、关节反折、手脚缺失、裁切关节和不符合重力的动作。`,
+    `9. 摄影叙事：${spec.editorialStyle}。`,
+    "10. 成片质感：超写实真人摄影，呈现真实皮肤纹理、自然独立发丝、准确人体结构、真实布料材质和符合物理规律的光影；禁止插画、CG、游戏建模、蜡像和塑料皮肤。",
     appearanceRule,
     stylingRule,
     retouchRule,

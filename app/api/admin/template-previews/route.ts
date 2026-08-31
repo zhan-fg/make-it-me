@@ -20,10 +20,28 @@ function authorized(request: Request, secret: string) {
   return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
-async function baselineModelPart(gender: "female" | "male") {
-  const file = path.join(process.cwd(), "public", "baseline-models", `${gender}-front.jpg`);
+type BaselineView = "front" | "left" | "right" | "half" | "full";
+
+async function baselineModelPart(gender: "female" | "male", view: BaselineView) {
+  const file = path.join(process.cwd(), "public", "baseline-models", `${gender}-${view}.jpg`);
   const data = await readFile(file);
   return { inlineData: { mimeType: "image/jpeg", data: data.toString("base64") } };
+}
+
+function baselineViews(prompt: string): BaselineView[] {
+  const views: BaselineView[] = ["front"];
+  if (prompt.includes("回眸") || prompt.includes("侧脸") || prompt.includes("侧身")) views.push(prompt.includes("右侧") ? "right" : "left");
+  if (prompt.includes("全身") || prompt.includes("三分之二")) views.push("full");
+  else if (prompt.includes("腰部以上") || prompt.includes("坐姿")) views.push("half");
+  return [...new Set(views)];
+}
+
+async function baselineModelParts(gender: "female" | "male", prompt: string) {
+  const views = baselineViews(prompt);
+  const labels: Record<BaselineView, string> = { front: "正面头肩身份基准", left: "左转约 40 度脸部结构参考", right: "右转约 40 度脸部结构参考", half: "半身肩颈与躯干比例参考", full: "全身身材与肢体比例参考" };
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: "以下照片全部属于同一个虚构基准模特。每张照片只补充对应角度或身体比例，不得创建、平均或融合新的脸。" }];
+  for (const view of views) parts.push({ text: labels[view] }, await baselineModelPart(gender, view));
+  return { views, parts };
 }
 
 function signedPreviewUrl(request: Request, blobUrl: string, secret: string) {
@@ -61,13 +79,13 @@ export async function POST(request: Request) {
         const forcedGender = input.baselineGender === "female" || input.baselineGender === "male" ? input.baselineGender : undefined;
         const baselineGender = forcedGender || (template.audience === "male" ? "male" : "female");
         const retouchSettings = input.retouchSettings && typeof input.retouchSettings === "object" ? input.retouchSettings as PortraitRetouchSettings : undefined;
-        const baselinePart = await baselineModelPart(baselineGender);
-        const generationPrompt = buildPortraitPrompt(template, "template", { retouchSettings });
+        const baseline = await baselineModelParts(baselineGender, template.prompt);
+        const generationPrompt = buildPortraitPrompt(template, "template", { retouchSettings, identityReferenceCount: baseline.views.length });
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [baselinePart, { text: generationPrompt }] }],
+            contents: [{ role: "user", parts: [...baseline.parts, { text: generationPrompt }] }],
             generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: template.aspectRatio } },
           }),
           signal: AbortSignal.timeout(110_000),
@@ -91,6 +109,7 @@ export async function POST(request: Request) {
           imageUrl: signedPreviewUrl(request, blob.url, apiKey),
           blobUrl: blob.url,
           baselineGender,
+          baselineViews: baseline.views,
           retouchSettings,
           model,
           prompt: generationPrompt,
