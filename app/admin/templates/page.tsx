@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { IconCheck, IconRefresh, IconSparkles, IconUpload } from "@tabler/icons-react";
 import { portraitTemplates } from "@/services/portrait-templates";
 import type { PortraitRetouchSettings } from "@/services/portrait-types";
+import { allBaselineViews, baselineImagePath, baselineViewLabels, type BaselineGender, type BaselineView } from "@/services/portrait-reference-selection";
 
 const defaultRetouchSettings: PortraitRetouchSettings = { skinSmoothing: 45, whitening: 30, blemishRemoval: 60, faceSlimming: 20, eyeEnlargement: 10, noseRefinement: 10, skinGlow: 45, makeupIntensity: 35 };
 
@@ -33,6 +34,8 @@ export default function TemplateAdminPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [baselineGender, setBaselineGender] = useState<"auto" | "female" | "male">("auto");
+  const [referenceMode, setReferenceMode] = useState<"auto" | "manual">("auto");
+  const [selectedBaselineViews, setSelectedBaselineViews] = useState<BaselineView[]>(["front"]);
   const [retouchSettings, setRetouchSettings] = useState<PortraitRetouchSettings>(defaultRetouchSettings);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -44,7 +47,7 @@ export default function TemplateAdminPage() {
     const response = await fetch("/api/admin/template-previews", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
-      body: JSON.stringify({ templateIds, baselineGender: baselineGender === "auto" ? undefined : baselineGender, retouchSettings, confirm: "GENERATE_TEMPLATE_PREVIEWS" }),
+      body: JSON.stringify({ templateIds, baselineGender: baselineGender === "auto" ? undefined : baselineGender, baselineViews: referenceMode === "manual" ? selectedBaselineViews : undefined, retouchSettings, confirm: "GENERATE_TEMPLATE_PREVIEWS" }),
     });
     const result = await payload(response);
     if (!response.ok) throw new Error(result.error || "模板生成失败");
@@ -98,6 +101,7 @@ export default function TemplateAdminPage() {
         <label className="flex items-center gap-2 text-sm">基准模特<select value={baselineGender} onChange={(event) => setBaselineGender(event.target.value as "auto" | "female" | "male")} className="rounded-full bg-white/15 px-3 py-2 outline-none"><option className="text-black" value="auto">按模板自动</option><option className="text-black" value="female">固定女模</option><option className="text-black" value="male">固定男模</option></select></label>
         <button disabled={busy || !selected.length || !secret} onClick={generate} className="ml-auto flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-[#201e1c] disabled:opacity-40"><IconSparkles size={17}/>{busy ? "处理中" : "批量生成"}</button>
       </div>
+      <BaselineMaterialSelector gender={baselineGender} mode={referenceMode} setMode={setReferenceMode} selected={selectedBaselineViews} setSelected={setSelectedBaselineViews}/>
       <AdminBeautyControls value={retouchSettings} onChange={setRetouchSettings}/>
       {message && <p className="mt-4 rounded-2xl bg-[#fff8dc] px-4 py-3 text-sm text-[#705d23]">{message}</p>}
       <section className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -118,6 +122,17 @@ export default function TemplateAdminPage() {
       </section>
     </div>
   </main>;
+}
+
+function BaselineMaterialSelector({ gender, mode, setMode, selected, setSelected }: { gender: "auto" | BaselineGender; mode: "auto" | "manual"; setMode: (value: "auto" | "manual") => void; selected: BaselineView[]; setSelected: (value: BaselineView[]) => void }) {
+  const previewGenders: BaselineGender[] = gender === "auto" ? ["female", "male"] : [gender];
+  const toggle = (view: BaselineView) => {
+    if (view === "front") return;
+    if (selected.includes(view)) return setSelected(selected.filter((item) => item !== view));
+    if (selected.length >= 3) return;
+    setSelected([...selected, view]);
+  };
+  return <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">模特素材选择器</h2><p className="mt-1 text-xs text-[#746e69]">正面身份照固定使用。自动模式按模板选择；手动模式最多选择三张。</p></div><div className="flex rounded-full bg-[#f1eeea] p-1 text-xs"><button onClick={() => setMode("auto")} className={`rounded-full px-4 py-2 ${mode === "auto" ? "bg-[#201e1c] text-white" : ""}`}>自动推荐</button><button onClick={() => setMode("manual")} className={`rounded-full px-4 py-2 ${mode === "manual" ? "bg-[#201e1c] text-white" : ""}`}>手动选择</button></div></div>{previewGenders.map((itemGender) => <div key={itemGender} className="mt-5"><p className="mb-3 text-xs font-semibold text-[#746e69]">{itemGender === "female" ? "女性基准模特" : "男性基准模特"}</p><div className="grid grid-cols-2 gap-3 sm:grid-cols-5">{allBaselineViews.map((view) => { const active = mode === "manual" && selected.includes(view); return <button key={view} disabled={mode === "auto" || (view !== "front" && !active && selected.length >= 3)} onClick={() => toggle(view)} className={`relative overflow-hidden rounded-xl border-2 text-left disabled:cursor-not-allowed ${active ? "border-[#806252]" : "border-transparent"}`}><img src={baselineImagePath(itemGender, view)} alt={`${itemGender}-${view}`} className="aspect-[3/4] w-full object-cover"/><span className="block bg-[#f7f5f2] px-2 py-2 text-[11px]">{baselineViewLabels[view]}{view === "front" ? " · 固定" : ""}</span>{active && <span className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-[#201e1c] text-white"><IconCheck size={14}/></span>}</button>; })}</div></div>)}</section>;
 }
 
 function AdminBeautyControls({ value, onChange }: { value: PortraitRetouchSettings; onChange: (value: PortraitRetouchSettings) => void }) {
