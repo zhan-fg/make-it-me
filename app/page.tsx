@@ -8,7 +8,7 @@ import { baselineGenderForTemplate, baselineImagePath, baselineViewLabels, recom
 
 type Step = "templates" | "selfie" | "generating" | "result";
 type Selfie = { previewUrl: string; blob: Blob; width: number; height: number; name: string; originalBytes: number; uploadBytes: number };
-const defaultRetouchSettings: PortraitRetouchSettings = { skinSmoothing: 45, whitening: 30, blemishRemoval: 60, faceSlimming: 20, eyeEnlargement: 10, noseRefinement: 10, skinGlow: 45, makeupIntensity: 35 };
+const defaultRetouchSettings: PortraitRetouchSettings = { skinSmoothing: 100, whitening: 100, blemishRemoval: 100, faceSlimming: 100, eyeEnlargement: 100, noseRefinement: 100, skinGlow: 100, makeupIntensity: 100 };
 
 function formatBytes(value: number) {
   return value >= 1024 * 1024 ? `${(value / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(value / 1024))}KB`;

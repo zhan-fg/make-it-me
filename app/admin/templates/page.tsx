@@ -6,7 +6,7 @@ import { portraitTemplates } from "@/services/portrait-templates";
 import type { PortraitRetouchSettings } from "@/services/portrait-types";
 import { allBaselineViews, baselineImagePath, baselineViewLabels, type BaselineGender, type BaselineView } from "@/services/portrait-reference-selection";
 
-const defaultRetouchSettings: PortraitRetouchSettings = { skinSmoothing: 45, whitening: 30, blemishRemoval: 60, faceSlimming: 20, eyeEnlargement: 10, noseRefinement: 10, skinGlow: 45, makeupIntensity: 35 };
+const defaultRetouchSettings: PortraitRetouchSettings = { skinSmoothing: 100, whitening: 100, blemishRemoval: 100, faceSlimming: 100, eyeEnlargement: 100, noseRefinement: 100, skinGlow: 100, makeupIntensity: 100 };
 
 type Draft = {
   templateId: string;

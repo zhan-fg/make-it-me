@@ -44,14 +44,14 @@ function detailedRetouchRule(template: PortraitTemplate, settings?: PortraitReto
   if (!settings) return undefined;
   if (template.category === "id_photo") return "证件照安全限制覆盖客户设置：磨皮、提亮和祛瑕仅允许轻度；禁止美白改变原始肤色，禁止瘦脸、大眼、鼻型调整和明显妆容，必须保持原始发型与真实身份。";
   const values = {
-    skinSmoothing: clamp(settings.skinSmoothing, 45),
-    whitening: clamp(settings.whitening, 30),
-    blemishRemoval: clamp(settings.blemishRemoval, 60),
-    faceSlimming: clamp(settings.faceSlimming, 20),
-    eyeEnlargement: clamp(settings.eyeEnlargement, 10),
-    noseRefinement: clamp(settings.noseRefinement, 10),
-    skinGlow: clamp(settings.skinGlow, 45),
-    makeupIntensity: clamp(settings.makeupIntensity, 35),
+    skinSmoothing: clamp(settings.skinSmoothing, 100),
+    whitening: clamp(settings.whitening, 100),
+    blemishRemoval: clamp(settings.blemishRemoval, 100),
+    faceSlimming: clamp(settings.faceSlimming, 100),
+    eyeEnlargement: clamp(settings.eyeEnlargement, 100),
+    noseRefinement: clamp(settings.noseRefinement, 100),
+    skinGlow: clamp(settings.skinGlow, 100),
+    makeupIntensity: clamp(settings.makeupIntensity, 100),
   };
   return [
     "按以下客户美颜参数分别执行，不得擅自联动放大其他项目：",
